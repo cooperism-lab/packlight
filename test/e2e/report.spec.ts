@@ -85,6 +85,7 @@ test('marks, keeps and saves picks with the keyboard alone, then shows the next 
   expect(picks.picks.map((p: { action: string }) => p.action).sort()).toEqual(['archive', 'keep']);
   await expect(page.getByRole('region', { name: 'Next step' })).toContainText(MESSAGES.picksSaved);
   await expect(page.getByRole('region', { name: 'Next step' })).toContainText(MESSAGES.stepReport);
+  await expect(page.getByRole('region', { name: 'Next step' })).toContainText(MESSAGES.noFile);
 });
 
 test('marks a plugin through one of its skills and shows the full impact first (DR7)', async ({ page }) => {

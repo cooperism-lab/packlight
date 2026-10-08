@@ -3,6 +3,7 @@ import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statS
 import { join } from 'node:path';
 import { claudePaths, collectInventory } from '../adapters/claude-code/inventory.js';
 import type { Inventory, Item, Kind, RemovalMethod } from '../core/types.js';
+import { INVOKE } from '../core/messages.js';
 import { atomicWrite, fileHash } from './fsops.js';
 import { recover, type RecoveryResult } from './journal.js';
 import { acquireLock } from './lock.js';
@@ -125,7 +126,7 @@ async function applyLocked(opts: ApplyOptions, paths: PacklightPaths, now: () =>
 
   const picks = parsePicks(readFileSync(opts.picksFile, 'utf8'));
   const inv = readScan(paths, picks.scanId);
-  if (!inv) throw new Error(`These picks name scan ${picks.scanId}, which packlight does not have. Run \`npx packlight\` and save your picks again.`);
+  if (!inv) throw new Error(`These picks name scan ${picks.scanId}, which packlight does not have. Run \`${INVOKE}\` and save your picks again.`);
   if (newestScan(paths, inv.agent, inv.projectScope)?.scanId !== picks.scanId) throw new Error(STALE_PICKS);
 
   const byId = new Map(inv.items.map(i => [i.id, i]));
@@ -225,7 +226,7 @@ async function applyLocked(opts: ApplyOptions, paths: PacklightPaths, now: () =>
   }
 
   out('');
-  for (const a of result.archived) out(`Archived ${a.item.name}${a.item.removal.method === 'manual' ? ' (remove it by hand: ' + (a.item.removal.where ?? '') + ')' : ''}. Restore: npx packlight restore ${a.opIds.join(' ')}`);
+  for (const a of result.archived) out(`Archived ${a.item.name}${a.item.removal.method === 'manual' ? ' (remove it by hand: ' + (a.item.removal.where ?? '') + ')' : ''}. Restore: ${INVOKE} restore ${a.opIds.join(' ')}`);
   for (const r of result.refused.slice(refusedBeforeRun)) out(`Refused ${r.item.name}: ${r.reason}`);
   for (const s of result.stillEffective) out(`Still in effect after apply: ${s.name}. Another settings file may switch it on; scan to see where.`);
   if (result.kept || result.unkept) out(`Kept ${result.kept} item${result.kept === 1 ? '' : 's'}${result.unkept ? `, cleared ${result.unkept} keep${result.unkept === 1 ? '' : 's'}` : ''}.${result.archived.length ? '' : ' Nothing archived.'}`);

@@ -2,13 +2,13 @@
 import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, sep } from 'node:path';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { createInterface } from 'node:readline/promises';
 import { apply, claudeCodeRunning, findPicksFile, STALE_PICKS } from './archive/apply.js';
 import { downloadsDir, newestScan, packlightPaths, readScan } from './archive/paths.js';
 import { archiveList, restore } from './archive/restore.js';
 import { scan } from './core/scan.js';
-import { MESSAGES } from './core/messages.js';
+import { INVOKE, MESSAGES, PASTE_COMMAND } from './core/messages.js';
 import { summarize } from './core/summary.js';
 import type { Inventory } from './core/types.js';
 import { buildReport } from './report/model.js';
@@ -20,7 +20,7 @@ Usage:
   packlight                 scan, write the report and open it
   packlight report [--scan <id>] [--no-open]
   packlight scan [--home <dir>] [--since <YYYY-MM-DD>] [--out <dir>] [--json]
-  packlight apply [picks.json] [--yes] [--home <dir>] [--out <dir>]
+  packlight apply [picks.json | --paste] [--yes] [--home <dir>] [--out <dir>]
   packlight restore <id…> | --all [--home <dir>] [--out <dir>]
   packlight archive list [--home <dir>] [--out <dir>]
 
@@ -77,6 +77,11 @@ function writeReport(home: string, packlightRoot: string, inv: Inventory): strin
   return file;
 }
 
+function readClipboard(): string | undefined {
+  const [cmd, args] = process.platform === 'darwin' ? ['pbpaste', []] : process.platform === 'win32' ? ['powershell', ['-NoProfile', '-Command', 'Get-Clipboard -Raw']] : ['xclip', ['-selection', 'clipboard', '-o']];
+  try { return execFileSync(cmd as string, args as string[], { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024 }); } catch { return undefined; }
+}
+
 function openFile(file: string): void {
   const [cmd, args] = process.platform === 'darwin' ? ['open', [file]] : process.platform === 'win32' ? ['cmd', ['/c', 'start', '""', file]] : ['xdg-open', [file]];
   try { spawn(cmd as string, args as string[], { detached: true, stdio: 'ignore' }).on('error', () => {}).unref(); } catch { /* the path is printed anyway */ }
@@ -116,7 +121,7 @@ async function main(argv: string[]): Promise<number> {
     const id = arg(argv, '--scan');
     const paths = packlightPaths(home, packlightRoot);
     const inv = id ? readScan(paths, id) : newestScan(paths, 'claude-code', scopeFor(paths));
-    if (!inv) { console.error(id ? `No scan ${id} in ${paths.scans}.` : 'No scan yet. Run `npx packlight` first.'); return 1; }
+    if (!inv) { console.error(id ? `No scan ${id} in ${paths.scans}.` : `No scan yet. Run \`${INVOKE}\` first.`); return 1; }
     const report = writeReport(home, packlightRoot, inv);
     console.log(`Report: ${report}`);
     if (!argv.includes('--no-open')) openFile(report);
@@ -138,9 +143,17 @@ async function main(argv: string[]): Promise<number> {
   }
 
   if (command === 'apply') {
-    const picksFile = positional(argv)[0] ?? findPicksFile(downloadsDir(home));
+    let picksFile = positional(argv)[0] ?? (argv.includes('--paste') ? undefined : findPicksFile(downloadsDir(home)));
+    if (argv.includes('--paste')) {
+      // Picks copied from the report: written to packlight's own folder, then read like any picks file (still untrusted).
+      const text = readClipboard();
+      if (!text?.trim().startsWith('{')) { console.error('The clipboard holds no picks. In the report, press Copy picks, then run this again.'); return 2; }
+      mkdirSync(packlightRoot, { recursive: true });
+      picksFile = join(packlightRoot, 'pasted-picks.json');
+      writeFileSync(picksFile, text);
+    }
     if (!picksFile) {
-      console.error('No picks file found in your downloads folder. Pass its path: packlight apply <file>.');
+      console.error(`No picks file found in your downloads folder. Pass its path (packlight apply <file>), or press Copy picks in the report and run: ${PASTE_COMMAND}`);
       return 2;
     }
     const yes = argv.includes('--yes');

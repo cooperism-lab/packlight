@@ -3,7 +3,7 @@ import { basename, join } from 'node:path';
 import { readKeeps, findPicksFile, parsePicks } from '../archive/apply.js';
 import { listManifests } from '../archive/journal.js';
 import { downloadsDir, readScan, type PacklightPaths } from '../archive/paths.js';
-import { MESSAGES, APPLY_COMMAND, REPORT_COMMAND } from '../core/messages.js';
+import { MESSAGES, APPLY_COMMAND, INVOKE, PASTE_COMMAND, REPORT_COMMAND } from '../core/messages.js';
 import type { Inventory, Item } from '../core/types.js';
 import { MIN_DAYS, MIN_SESSIONS, suggestions, type Suggestion } from './suggest.js';
 
@@ -41,7 +41,7 @@ export interface ReportData {
   /** Marks from the newest picks file saved for the previous scan (design-delta DE4 reopened). */
   savedPicks?: { scanId: string; file: string; marks: Record<string, 'archive' | 'keep'> };
   findings: Finding[];
-  messages: typeof MESSAGES & { applyCommand: string; reportCommand: string };
+  messages: typeof MESSAGES & { applyCommand: string; reportCommand: string; pasteCommand: string; invoke: string };
 }
 
 /** Characters hooks add at each session start: the sum of each start hook's average injection. */
@@ -162,6 +162,6 @@ export function buildReport(inv: Inventory, paths: PacklightPaths): ReportData {
     })),
     ...(savedPicks ? { savedPicks } : {}),
     findings: findings(inv, items),
-    messages: { ...MESSAGES, applyCommand: APPLY_COMMAND, reportCommand: REPORT_COMMAND },
+    messages: { ...MESSAGES, applyCommand: APPLY_COMMAND, reportCommand: REPORT_COMMAND, pasteCommand: PASTE_COMMAND, invoke: INVOKE },
   };
 }

@@ -508,7 +508,10 @@ export function clientMain(): void {
         h('ul', null, list.map(i => h('li', null, i.name, i.kind === 'plugin' ? h('span', { class: 'muted' }, ` (${impactText(i)})`) : null, i.usage.ambiguous ? h('span', { class: 'muted' }, ` · ${usageCell(i)}`) : null)))));
     }
     if (keeps || unkeeps) out.push(h('div', { class: 'group' }, h('h2', null, 'Keep (no change to your setup)'), h('p', { class: 'muted' }, `${plural(keeps, 'item')} to keep${unkeeps ? `, ${plural(unkeeps, 'keep')} to clear` : ''}.`)));
-    out.push(h('p', null, h('button', { class: 'btn primary', 'data-key': 'save', onclick: savePicks }, 'Save my picks')));
+    // A download can be blocked without any error reaching the page, so copying is always offered too.
+    out.push(h('p', { class: 'hero-line' },
+      h('button', { class: 'btn primary', 'data-key': 'save', onclick: savePicks }, 'Save my picks'),
+      h('button', { class: 'btn', 'data-key': 'copy-picks', onclick: () => { copy(picksJson(), 'picks')(); state.saved = true; render(); } }, 'Copy picks')));
     if (state.downloadFailed) {
       out.push(h('div', { class: 'next' }, h('p', null, `Save this as packlight-picks-${data.scanId}.json, then run the command below.`),
         h('textarea', { class: 'picksjson', readonly: true, 'aria-label': 'Picks file contents' }, state.downloadFailed),
@@ -517,7 +520,8 @@ export function clientMain(): void {
     if (state.saved || state.downloadFailed) {
       out.push(h('div', { class: 'next', role: 'region', 'aria-label': 'Next step' },
         h('p', null, data.messages.picksSaved),
-        h('ol', null, h('li', null, data.messages.stepApply, codebox(data.messages.applyCommand, 'copy-apply')), h('li', null, data.messages.stepReport, codebox(data.messages.reportCommand, 'copy-report')))));
+        h('ol', null, h('li', null, data.messages.stepApply, codebox(data.messages.applyCommand, 'copy-apply')), h('li', null, data.messages.stepReport, codebox(data.messages.reportCommand, 'copy-report'))),
+        h('p', { class: 'muted' }, data.messages.noFile)));
     }
     return out;
   }
@@ -531,13 +535,13 @@ export function clientMain(): void {
       out.push(h('p', { class: 'lede' }, `Nothing archived yet. Items you apply with \`${data.messages.applyCommand}\` appear here, each with its restore command.`));
       return out;
     }
-    if (open.length) out.push(codebox('npx packlight restore --all', 'copy-restore-all'));
+    if (open.length) out.push(codebox(`${data.messages.invoke} restore --all`, 'copy-restore-all'));
     for (const a of [...open].reverse()) {
       const back = data.items.find(i => i.id === a.itemId);
       out.push(h('div', { class: 'group' }, h('h2', null, a.itemName, back ? h('span', { class: 'tag red' }, 'came back') : null),
         h('p', { class: 'muted' }, `${METHOD_TEXT[a.method] ?? a.method} · ${date(a.archivedAt)} · ${tildify(a.where)}`),
         back ? h('p', { class: 'muted' }, `Archived ${date(a.archivedAt)}, reinstalled since (probably by an updater).`) : null,
-        codebox(`npx packlight restore ${a.opId}`, `copy-${a.opId}`)));
+        codebox(`${data.messages.invoke} restore ${a.opId}`, `copy-${a.opId}`)));
     }
     if (waiting.length) {
       out.push(h('div', { class: 'group' }, h('h2', null, 'Waiting for you'),
