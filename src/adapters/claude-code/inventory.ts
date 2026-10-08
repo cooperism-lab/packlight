@@ -112,11 +112,14 @@ function skillsIn(root: string, opts: { source: string; projectRoot: string | nu
     const name = opts.plugin ? `${pluginShortName(opts.plugin)}:${d}` : d;
     const description = fm.description ?? '';
     const seen = opts.firstSeen !== undefined ? { firstSeen: opts.firstSeen, firstSeenSource: opts.firstSeen ? 'installedAt' as const : null } : firstSeenOf(dir);
+    // A folder that holds other skills or shared scripts is a suite (gstack is one): moving it would break the
+    // skills that depend on it, so it is only removable through the suite's own uninstaller.
+    const suite = !opts.plugin && (existsSync(join(dir, 'bin')) || dirs(dir).some(c => existsSync(join(dir, c, 'SKILL.md'))));
     out.push(makeItem({
       kind: 'skill', name, source: opts.source, path: dir, projectRoot: opts.projectRoot, enabled: opts.enabled,
       description, standingChars: opts.enabled ? listingChars(name, description) : 0,
-      fingerprint: pathFingerprint(dir), ...seen, logKeys: [name], plugin: opts.plugin,
-      removal: { method: opts.method, where: opts.where },
+      fingerprint: suite ? valueFingerprint({ dir, description }) : pathFingerprint(dir), ...seen, logKeys: [name], plugin: opts.plugin,
+      removal: suite ? { method: 'manual', where: `the ${name} suite's own uninstaller (other skills depend on ${dir})` } : { method: opts.method, where: opts.where },
     }));
   }
   return out;
@@ -261,7 +264,7 @@ function pluginItems(paths: ClaudePaths, settings: SettingsFile[]): Item[] {
       ...commandsIn(join(root, 'commands'), childOpts),
       ...agentsIn(join(root, 'agents'), childOpts),
       ...hooksFrom(readJson(join(root, 'hooks', 'hooks.json'))?.hooks, { ...childOpts, file: join(root, 'hooks', 'hooks.json'), scope: 'plugin' }),
-      ...mcpFrom(mcpServersOf(readJson(join(root, '.mcp.json'))), { ...childOpts, file: join(root, '.mcp.json'), scope: 'plugin', pointerBase: ['mcpServers'] }),
+      ...(() => { const m = mcpFile(join(root, '.mcp.json')); return mcpFrom(m.servers, { ...childOpts, file: join(root, '.mcp.json'), scope: 'plugin', pointerBase: m.pointerBase }); })(),
     ];
     const members: Partial<Record<Kind, number>> = {};
     for (const c of children) members[c.kind] = (members[c.kind] ?? 0) + 1;
@@ -282,6 +285,16 @@ function pluginItems(paths: ClaudePaths, settings: SettingsFile[]): Item[] {
 const mcpServersOf = (json: any): Record<string, unknown> | undefined =>
   json && typeof json === 'object' ? (json.mcpServers && typeof json.mcpServers === 'object' ? json.mcpServers : undefined) : undefined;
 
+/** A .mcp.json may list servers under "mcpServers" or, as some plugins ship it, at the top level. */
+function mcpFile(path: string): { servers: Record<string, unknown> | undefined; pointerBase: string[] } {
+  const json = readJson(path);
+  const wrapped = mcpServersOf(json);
+  if (wrapped) return { servers: wrapped, pointerBase: ['mcpServers'] };
+  const isServer = (v: any): boolean => !!v && typeof v === 'object' && (typeof v.command === 'string' || typeof v.url === 'string' || typeof v.type === 'string');
+  if (json && typeof json === 'object' && Object.values(json).length && Object.values(json).every(isServer)) return { servers: json, pointerBase: [] };
+  return { servers: undefined, pointerBase: ['mcpServers'] };
+}
+
 /** claude.ai organisation plugins the desktop app syncs: their skills load into Claude Code, removable only in the app. */
 function desktopPlugins(paths: ClaudePaths): Item[] {
   const out: Item[] = [];
@@ -301,7 +314,7 @@ function desktopPlugins(paths: ClaudePaths): Item[] {
           ...skillsIn(join(root, 'skills'), opts),
           ...commandsIn(join(root, 'commands'), opts),
           ...agentsIn(join(root, 'agents'), opts),
-          ...mcpFrom(mcpServersOf(readJson(join(root, '.mcp.json'))), { ...opts, file: join(root, '.mcp.json'), scope: 'app', pointerBase: ['mcpServers'] }),
+          ...(() => { const m = mcpFile(join(root, '.mcp.json')); return mcpFrom(m.servers, { ...opts, file: join(root, '.mcp.json'), scope: 'app', pointerBase: m.pointerBase }); })(),
         ];
         const members: Partial<Record<Kind, number>> = {};
         for (const c of children) members[c.kind] = (members[c.kind] ?? 0) + 1;
@@ -375,7 +388,8 @@ export function collectInventory(paths: ClaudePaths, projectRoots: string[]): It
   for (const root of projectRoots) {
     const local = claudeJson.projects?.[root];
     items.push(...mcpFrom(mcpServersOf(local), { file: paths.claudeJson, scope: 'project-local', source: `project:${basename(root)}`, projectRoot: root, pointerBase: ['projects', root, 'mcpServers'], enabled: true, method: 'mcp-extract' }));
-    items.push(...mcpFrom(mcpServersOf(readJson(join(root, '.mcp.json'))), { file: join(root, '.mcp.json'), scope: 'project', source: `project:${basename(root)}`, projectRoot: root, pointerBase: ['mcpServers'], enabled: true, method: 'mcp-extract' }));
+    const projMcp = mcpFile(join(root, '.mcp.json'));
+    items.push(...mcpFrom(projMcp.servers, { file: join(root, '.mcp.json'), scope: 'project', source: `project:${basename(root)}`, projectRoot: root, pointerBase: projMcp.pointerBase, enabled: true, method: 'mcp-extract' }));
 
     // Project skills, commands, agents and instructions.
     const proj = { source: `project:${basename(root)}`, projectRoot: root, enabled: true, method: 'move' as const };
