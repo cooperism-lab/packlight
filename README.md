@@ -14,12 +14,12 @@ Everything runs locally: no telemetry, and no network calls from the CLI or the 
 
 ## Status
 
-Issues 1 and 3 are built. `packlight scan` inventories skills, commands, agents, hooks, plugins, MCP servers and instruction files. It counts their use from your local session logs and reads Claude Code's own skill listing to see which skills lost their description. `packlight apply` archives what you picked and `packlight restore` puts it back byte for byte, with a crash-safe journal. The report (issue 2) is next.
+Issues 1 to 3 are built (v0.1 scope). `packlight` scans your setup and opens a report: which skills Claude Code dropped from its listing, what each hook injects, and what was not observed in your sessions. Mark what to archive and press Save my picks; `packlight apply` archives it and `packlight restore` puts it back byte for byte, with a crash-safe journal.
 
 ```bash
 npm install
 npm run build
-node dist/cli.js scan
+node dist/cli.js
 ```
 
 The spec has been through strategy, design and engineering review.

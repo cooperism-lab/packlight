@@ -55,6 +55,8 @@ describe('frontmatter', () => {
     expect(frontmatter('---\ndescription: >\n  Folded line one\n  and two.\nmodel: opus\n---\n')).toEqual({ description: 'Folded line one and two.', model: 'opus' });
     expect(frontmatter('---\r\ndescription: Windows line endings\r\n---\r\n')).toEqual({ description: 'Windows line endings' });
     expect(frontmatter('# no frontmatter')).toEqual({});
+    expect(frontmatter('---\ndescription: "Say \\"hi\\" <b>"\n---\n')).toEqual({ description: 'Say "hi" <b>' });
+    expect(frontmatter("---\ndescription: 'It''s here'\n---\n")).toEqual({ description: "It's here" });
   });
 });
 

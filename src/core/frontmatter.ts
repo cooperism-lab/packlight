@@ -17,7 +17,8 @@ export function frontmatter(text: string): { name?: string; description?: string
       cont.push((lines[++i] ?? '').trim());
     }
     value = [value, ...cont].join(' ').replace(/\s+/g, ' ').trim();
-    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) value = value.slice(1, -1);
+    if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) value = value.slice(1, -1).replace(/\\(["\\/])/g, '$1').replace(/\\n/g, ' ');
+    else if (value.length >= 2 && value.startsWith("'") && value.endsWith("'")) value = value.slice(1, -1).replace(/''/g, "'");
     out[key] = value;
   }
   return out;

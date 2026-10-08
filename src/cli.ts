@@ -1,17 +1,24 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
+import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline/promises';
 import { apply, claudeCodeRunning, findPicksFile, STALE_PICKS } from './archive/apply.js';
-import { downloadsDir } from './archive/paths.js';
+import { downloadsDir, newestScan, packlightPaths, readScan } from './archive/paths.js';
 import { archiveList, restore } from './archive/restore.js';
 import { scan } from './core/scan.js';
+import { MESSAGES } from './core/messages.js';
 import { summarize } from './core/summary.js';
+import type { Inventory } from './core/types.js';
+import { buildReport } from './report/model.js';
+import { renderReport } from './report/render.js';
 
 const USAGE = `packlight: see what your coding agent carries
 
 Usage:
+  packlight                 scan, write the report and open it
+  packlight report [--scan <id>] [--no-open]
   packlight scan [--home <dir>] [--since <YYYY-MM-DD>] [--out <dir>] [--json]
   packlight apply [picks.json] [--yes] [--home <dir>] [--out <dir>]
   packlight restore <id…> | --all [--home <dir>] [--out <dir>]
@@ -21,7 +28,8 @@ Usage:
   --out    packlight's own folder (default: <home>/.packlight)
   --since  only count sessions from this date
   --json   print the inventory to stdout instead of a summary
-  --yes    apply without asking (it still prints the plan)`;
+  --yes    apply without asking (it still prints the plan)
+  --no-open  write the report without opening it`;
 
 function arg(argv: string[], name: string): string | undefined {
   const i = argv.indexOf(name);
@@ -50,12 +58,70 @@ async function confirm(question: string): Promise<boolean> {
   try { return /^y(es)?$/i.test((await rl.question(`${question} [y/N] `)).trim()); } finally { rl.close(); }
 }
 
+/** The newest scan's scope: the current folder's project if it has a scan, else the newest scan of any scope. */
+function scopeFor(paths: ReturnType<typeof packlightPaths>): string {
+  try {
+    const ids = readdirSync(paths.scans).sort().reverse();
+    const scans = ids.map(i => readScan(paths, i)).filter((x): x is Inventory => !!x);
+    const here = scans.find(s => s.projectScope !== 'global' && (process.cwd() === s.projectScope || process.cwd().startsWith(s.projectScope + sep)));
+    return (here ?? scans[0])?.projectScope ?? 'global';
+  } catch { return 'global'; }
+}
+
+/** Writes report.html beside packlight's data and returns its path. */
+function writeReport(home: string, packlightRoot: string, inv: Inventory): string {
+  const paths = packlightPaths(home, packlightRoot);
+  const file = join(packlightRoot, 'report.html');
+  mkdirSync(packlightRoot, { recursive: true });
+  writeFileSync(file, renderReport(buildReport(inv, paths)));
+  return file;
+}
+
+function openFile(file: string): void {
+  const [cmd, args] = process.platform === 'darwin' ? ['open', [file]] : process.platform === 'win32' ? ['cmd', ['/c', 'start', '""', file]] : ['xdg-open', [file]];
+  try { spawn(cmd as string, args as string[], { detached: true, stdio: 'ignore' }).on('error', () => {}).unref(); } catch { /* the path is printed anyway */ }
+}
+
+async function scanAndSave(home: string, packlightRoot: string, since?: string): Promise<{ inventory: Inventory; ms: number; file: string }> {
+  const started = Date.now();
+  const inventory = await scan({ home, cwd: process.cwd(), since });
+  const dir = join(packlightRoot, 'scans', inventory.scanId);
+  mkdirSync(dir, { recursive: true });
+  const file = join(dir, 'inventory.json');
+  writeFileSync(file, JSON.stringify(inventory));
+  return { inventory, ms: Date.now() - started, file };
+}
+
 async function main(argv: string[]): Promise<number> {
   const [command] = argv;
-  if (!command || command === '--help' || command === '-h') { console.log(USAGE); return 0; }
+  if (command === '--help' || command === '-h' || command === 'help') { console.log(USAGE); return 0; }
   const home = arg(argv, '--home') ?? homedir();
   const packlightRoot = arg(argv, '--out') ?? join(home, '.packlight');
   const out = (line: string): void => console.log(line);
+
+  if (!command || command.startsWith('--')) {
+    if (!existsSync(join(home, '.claude'))) {
+      console.error(`No Claude Code setup found: ${join(home, '.claude')} does not exist. Pass --home to scan another folder.`);
+      return 1;
+    }
+    const { inventory, ms } = await scanAndSave(home, packlightRoot, arg(argv, '--since'));
+    console.log(summarize(inventory, ms));
+    const report = writeReport(home, packlightRoot, inventory);
+    console.log(`\nReport: ${report}\n${MESSAGES.afterScan}`);
+    if (!argv.includes('--no-open')) openFile(report);
+    return 0;
+  }
+
+  if (command === 'report') {
+    const id = arg(argv, '--scan');
+    const paths = packlightPaths(home, packlightRoot);
+    const inv = id ? readScan(paths, id) : newestScan(paths, 'claude-code', scopeFor(paths));
+    if (!inv) { console.error(id ? `No scan ${id} in ${paths.scans}.` : 'No scan yet. Run `npx packlight` first.'); return 1; }
+    const report = writeReport(home, packlightRoot, inv);
+    console.log(`Report: ${report}`);
+    if (!argv.includes('--no-open')) openFile(report);
+    return 0;
+  }
 
   if (command === 'scan') {
     const since = arg(argv, '--since');
@@ -64,14 +130,9 @@ async function main(argv: string[]): Promise<number> {
       console.error(`No Claude Code setup found: ${join(home, '.claude')} does not exist. Pass --home to scan another folder.`);
       return 1;
     }
-    const started = Date.now();
-    const inventory = await scan({ home, cwd: process.cwd(), since });
-    if (argv.includes('--json')) { process.stdout.write(JSON.stringify(inventory, null, 1) + '\n'); return 0; }
-    const dir = join(packlightRoot, 'scans', inventory.scanId);
-    mkdirSync(dir, { recursive: true });
-    const file = join(dir, 'inventory.json');
-    writeFileSync(file, JSON.stringify(inventory));
-    console.log(summarize(inventory, Date.now() - started));
+    if (argv.includes('--json')) { process.stdout.write(JSON.stringify(await scan({ home, cwd: process.cwd(), since }), null, 1) + '\n'); return 0; }
+    const { inventory, ms, file } = await scanAndSave(home, packlightRoot, since);
+    console.log(summarize(inventory, ms));
     console.log(`\nInventory written to ${file}`);
     return 0;
   }
@@ -87,6 +148,7 @@ async function main(argv: string[]): Promise<number> {
     out(`Picks: ${picksFile}`);
     try {
       const r = await apply({ home, packlightRoot, picksFile, yes, confirm, claudeRunning: claudeCodeRunning, out, crash });
+      if (r.archived.length || r.kept || r.unkept) out(`\n${MESSAGES.stepReport}`);
       return r.exitCode;
     } catch (err) {
       console.error((err as Error).message === STALE_PICKS ? STALE_PICKS : `packlight: ${(err as Error).message}`);

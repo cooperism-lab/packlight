@@ -19,7 +19,9 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - run: npm run build
       - run: npm run typecheck
       - run: npm test
-      - run: npm run build
       - run: node dist/cli.js --help
+      - run: npx playwright install --with-deps chromium firefox webkit
+      - run: npx playwright test

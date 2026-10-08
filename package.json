@@ -18,9 +18,12 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "scan": "node --import tsx src/cli.ts scan"
+    "scan": "node --import tsx src/cli.ts scan",
+    "e2e": "npm run build && playwright test"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@playwright/test": "1.64.0",
     "@types/node": "22.20.5",
     "@types/write-file-atomic": "4.0.3",
     "tsx": "4.23.15",
