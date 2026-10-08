@@ -1,0 +1,9 @@
+{
+ "attachment:hook_success": 3,
+ "attachment:hook_additional_context": 3,
+ "user:command": 3,
+ "attachment:skill_listing": 3,
+ "tool:mcp": 3,
+ "tool:Skill": 3,
+ "tool:Agent": 3
+}
