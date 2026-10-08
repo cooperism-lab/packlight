@@ -115,7 +115,9 @@ export function buildHome(root: string): FixtureHome {
     },
   });
   json(join(claude, 'settings.local.json'), { hooks: { Stop: [{ hooks: [{ type: 'command', command: '/usr/local/bin/bell.sh' }] }] } });
+  // kit is also switched on in the project's own settings: archiving it must turn it off in both (eng X2).
   json(join(project, '.claude', 'settings.json'), {
+    enabledPlugins: { 'kit@market': true },
     hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [{ type: 'command', command: '/usr/local/bin/guard.sh check' }] }] },
   });
 

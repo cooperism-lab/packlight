@@ -14,7 +14,7 @@ Everything runs locally: no telemetry, and no network calls from the CLI or the 
 
 ## Status
 
-Issue 1 (scanner and Claude Code adapter) is in progress. `packlight scan` inventories skills, commands, agents, hooks, plugins, MCP servers and instruction files. It counts their use from your local session logs and reads Claude Code's own skill listing to see which skills lost their description. The report, archive and restore come in issues 2 and 3.
+Issues 1 and 3 are built. `packlight scan` inventories skills, commands, agents, hooks, plugins, MCP servers and instruction files. It counts their use from your local session logs and reads Claude Code's own skill listing to see which skills lost their description. `packlight apply` archives what you picked and `packlight restore` puts it back byte for byte, with a crash-safe journal. The report (issue 2) is next.
 
 ```bash
 npm install
