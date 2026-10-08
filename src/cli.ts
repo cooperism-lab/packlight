@@ -152,6 +152,10 @@ async function main(argv: string[]): Promise<number> {
       picksFile = join(packlightRoot, 'pasted-picks.json');
       writeFileSync(picksFile, text);
     }
+    if (picksFile && !existsSync(picksFile)) {
+      console.error(`There is no file at ${picksFile}. Run \`${INVOKE} apply\` with no path to use the newest picks file in your downloads folder.`);
+      return 2;
+    }
     if (!picksFile) {
       console.error(`No picks file found in your downloads folder. Pass its path (packlight apply <file>), or press Copy picks in the report and run: ${PASTE_COMMAND}`);
       return 2;
