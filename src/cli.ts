@@ -130,7 +130,7 @@ const KIND_WORD: Record<string, [string, string]> = { skill: ['skill', 'skills']
 const count = (n: number, kind: string): string => `${n} ${KIND_WORD[kind]?.[n === 1 ? 0 : 1] ?? kind}`;
 /** "about 2k tokens less per session (10% of your setup; 7.9k characters)": tokens estimated at CHARS_PER_TOKEN. */
 const saving = (savedChars: number, setup: number): string => {
-  const pct = setup ? (savedChars / setup) * 100 : 0;
+  const pct = setup ? Math.min(100, (savedChars / setup) * 100) : 0;
   return `about ${kchars(savedChars / CHARS_PER_TOKEN)} tokens less per session (${setup ? `${pct > 0 && pct < 1 ? 'under 1' : Math.round(pct)}% of your setup; ` : ''}${kchars(savedChars)} characters)`;
 };
 const kchars = (n: number): string => (n >= 1000 ? `${(n / 1000).toFixed(1).replace(/\.0$/, '')}k` : String(n));

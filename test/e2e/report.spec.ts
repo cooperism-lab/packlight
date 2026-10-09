@@ -193,7 +193,8 @@ test('offers the one-click fix as one line, with the command and by-hand list be
   await expect(page.getByRole('region', { name: 'Run the fix' })).toHaveCount(0);
   await fix.getByRole('button', { name: 'Fix it' }).click();
   const run = page.getByRole('region', { name: 'Run the fix' });
-  await expect(run).toContainText('packlight fix');
+  // Through npx the report names the npx command; installed, the short one.
+  await expect(run).toContainText(/(npx packlight-cli|packlight) fix/);
   await expect(run).toContainText('Projected: 1.5k fewer characters per session, about 375 tokens at roughly 4 characters per token.');
   await expect(page.getByText('375 could go')).toBeVisible();
   await expect(run).toContainText('claude.ai › Settings anthropic-skills:docs');

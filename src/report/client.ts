@@ -66,7 +66,7 @@ export function clientMain(): void {
   // Tokens are estimated from characters (logs record characters): about 4 per token, the same as CHARS_PER_TOKEN in model.ts.
   const tokens = (c: number): string => chars(c / 4);
   const setupTotal = (): number => { const l = data.sessionLoad; return !l ? 0 : l.measuredTokens ? l.measuredTokens * 4 : l.skillListing + l.mcpTools + l.mcpInstructions + l.hookStart + l.agents + (l.agentsMd ?? 0) + (l.pluginInstructions ?? 0); };
-  const share = (part: number, whole: number): string => { const p = (part / whole) * 100; return p > 0 && p < 1 ? 'under 1%' : `${Math.round(p)}%`; };
+  const share = (part: number, whole: number): string => { const p = Math.min(100, (part / whole) * 100); return p > 0 && p < 1 ? 'under 1%' : `${Math.round(p)}%`; };
   const plural = (n: number, one: string, many = `${one}s`): string => `${n} ${n === 1 ? one : many}`;
   const tildify = (p: string): string => (p.startsWith(data.home) ? `~${p.slice(data.home.length)}` : p);
   const live = document.getElementById('live')!;
