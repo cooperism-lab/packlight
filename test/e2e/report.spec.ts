@@ -33,12 +33,15 @@ test('renders a hostile description as text and never runs it (CEO F4)', async (
   expect(await page.locator('img[src="x"]').count()).toBe(0);
 });
 
-test('leads with the listing budget for the scanned project (DR1)', async ({ page }) => {
+test('leads with what each session starts with, and keeps skill detail in the Skills section', async ({ page }) => {
   await open(page);
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText("1 skills pushed out of proj's skill listing");
-  await expect(page.getByRole('img', { name: '1 of 3 skills listed without their description' })).toBeVisible();
-  await expect(page.getByText(/Each session starts with about .* MCP tool names \(5 tools\)/)).toBeVisible();
-  await page.getByRole('button', { name: 'Review the 1' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^Each session in proj starts with about [\d.]+k? chars of setup$/);
+  await expect(page.getByRole('img', { name: /Each session starts with about .*MCP tool names.*skill listing/ })).toBeVisible();
+  // The legend jumps to the kind behind each part of the bar.
+  await page.getByRole('button', { name: /MCP tool names/ }).click();
+  await expect(page.getByRole('heading', { level: 2, name: /MCP servers/ })).toBeVisible();
+  await page.getByRole('navigation', { name: 'Kinds' }).getByRole('button', { name: /Skills/ }).click();
+  await page.getByRole('button', { name: 'Show the 1' }).click();
   await expect(page.getByRole('status').first()).toHaveText('Showing 1 of 13');
 });
 
@@ -167,7 +170,7 @@ test('switches kind from the sidebar and heads the table with that kind', async 
   await expect(page.getByRole('heading', { level: 2 }).first()).toContainText('Hooks');
 });
 
-test('offers the one-click fix with its projected gain, the command, and a by-hand list (fix)', async ({ page }) => {
+test('offers the one-click fix as one line, with the command and by-hand list behind it (fix)', async ({ page }) => {
   rmSync(fx.dir, { recursive: true, force: true });
   // The fixture home has too few sessions for anything to qualify, so the plan is supplied; report/fix.ts is unit-tested.
   fx = await makeReport(undefined, data => {
@@ -178,13 +181,14 @@ test('offers the one-click fix with its projected gain, the command, and a by-ha
     };
   });
   await open(page);
-  const fix = page.getByRole('region', { name: 'Archive 2 unused items in one go' });
-  await expect(fix).toContainText('3 skills get their description back · 1.5k fewer chars every session (projected)');
+  const fix = page.getByRole('region', { name: 'Fix' });
+  await expect(fix).toHaveText(/^Archive 2 unused items · 3 skill descriptions back · 1.5k fewer chars per session \(projected\)Fix it$/);
+  await expect(page.getByRole('region', { name: 'Run the fix' })).toHaveCount(0);
   await fix.getByRole('button', { name: 'Fix it' }).click();
-  await expect(page.getByRole('region', { name: 'Run the fix' })).toContainText('packlight fix');
+  const run = page.getByRole('region', { name: 'Run the fix' });
+  await expect(run).toContainText('packlight fix');
+  await expect(run).toContainText('claude.ai › Settings anthropic-skills:docs');
   expect((await new AxeBuilder({ page }).analyze()).violations.map(v => `${v.id} ${v.nodes.map(n => n.target.join(' ') + ' ' + n.failureSummary).join(' / ')}`)).toEqual([]);
-  await fix.getByText(/Also unused, but only you can remove: 1 item/).click();
-  await expect(fix).toContainText('claude.ai › Settings anthropic-skills:docs');
   await page.getByRole('button', { name: 'Review them one by one instead' }).click();
   await expect(page.getByRole('tab', { name: 'Picks (2)' })).toHaveAttribute('aria-selected', 'true');
 });

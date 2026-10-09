@@ -19,6 +19,7 @@ export function clientMain(): void {
     mcp: 'Tool servers Claude can call. Claude Code lists every tool\'s name at the start of each session, and some servers add instructions too, so an unused server still costs its load.',
     instructions: 'CLAUDE.md and similar files, loaded in full in their project. packlight never changes these.',
   };
+  const ONE: Record<string, string> = { skill: 'skill', command: 'command', agent: 'agent', hook: 'hook', plugin: 'plugin', mcp: 'MCP server' };
   const METHOD_TEXT: Record<string, string> = {
     move: 'Moved into packlight\'s archive', 'hook-extract': 'Cut out of their settings files', 'mcp-extract': 'Cut out of their config files',
     'plugin-disable': 'Plugins turned off', manual: 'Removed by hand (packlight records them)',
@@ -248,97 +249,82 @@ export function clientMain(): void {
     return out;
   }
 
+  // The top of the report: one headline, one bar, one action. Details live in each kind's section.
   function hero(): Child {
-    const items = visibleItems();
-    const startHooks = items.filter(i => i.kind === 'hook' && i.enabled && i.hook?.event === 'SessionStart' && i.usage.hook && i.usage.hook.firings);
-    const toolHooks = items.filter(i => i.kind === 'hook' && i.enabled && /ToolUse$/.test(i.hook?.event ?? '') && i.usage.hook && i.usage.hook.firings);
-    const per = (list: ReportItem[]) => list.reduce((n, i) => n + i.usage.hook!.injectedChars / i.usage.hook!.firings, 0);
-    const hookLine = h('p', { class: 'hero-line' },
-      data.sessionLoad
-        ? h('span', null, 'Hooks also add ', h('b', null, `${chars(per(toolHooks))} chars`), ' per tool call')
-        : h('span', null, 'Hooks add ', h('b', null, `${chars(per(startHooks))} chars`), ' per session start and ', h('b', null, `${chars(per(toolHooks))}`), ' per tool call'),
-      h('button', { class: 'btn', 'data-key': 'review-hooks', onclick: () => { state.kind = 'hook'; state.sort = 'cost'; state.suggestedOnly = false; state.pushedOutOnly = false; render(); } }, 'Review hooks'));
-    const L = data.sessionLoad;
-    const loadParts: [number, string][] = L ? ([
-      [L.mcpTools, `MCP tool names (${L.mcpToolCount} tools)`], [L.skillListing, 'skill listing'], [L.mcpInstructions, 'MCP instructions'], [L.hookStart, 'hook text'],
-    ] as [number, string][]).filter(([n]) => n > 0).sort((a, b) => b[0] - a[0]) : [];
-    const loadLine = loadParts.length ? h('p', { class: 'hero-line loadline' },
-      h('span', null, 'Each session starts with about ', h('b', null, `${chars(loadParts.reduce((n, [v]) => n + v, 0))} chars`), ': ',
-        loadParts.map(([v, label], k) => [k ? ' · ' : '', h('b', null, chars(v)), ` ${label}`])),
-      L!.mcpTools ? h('button', { class: 'btn', 'data-key': 'review-mcp', onclick: () => { state.kind = 'mcp'; state.sort = 'cost'; state.suggestedOnly = false; state.pushedOutOnly = false; render(); } }, 'Review MCP servers') : null) : null;
     const context = h('p', { class: 'context' },
       h('span', null, state.view === 'global' ? 'All projects' : projectName(state.view)),
       h('span', null, 'Claude Code'),
       h('span', null, `${date(data.window.from)} to ${date(data.window.to)}`),
       h('span', null, plural(data.sessions, 'session')),
       data.linesUnreadable ? h('span', null, `parse gaps: ${plural(data.linesUnreadable, 'line')}`) : null);
+    const go = (kind: Kind, pushed = false) => (): void => { state.kind = kind; state.sort = 'cost'; state.suggestedOnly = false; state.pushedOutOnly = pushed; render(); document.querySelector('.kindhead')?.scrollIntoView({ block: 'start' }); };
 
     if (state.view === 'global') {
       const top = [...data.projects].sort((a, b) => b.sessions - a.sessions).slice(0, 5);
-      return h('div', { class: 'hero' }, context, h('h1', null, 'Pick a project to see its listing budget'),
-        h('p', { class: 'hero-line' }, top.map(p => h('button', { class: 'btn', 'data-key': `pick-${p.root}`, onclick: () => { state.view = p.root; render(); } }, p.name))), loadLine, hookLine);
+      return h('div', { class: 'hero' }, context, h('h1', null, 'Pick a project to see what its sessions start with'),
+        h('p', { class: 'hero-line' }, top.map(p => h('button', { class: 'btn', 'data-key': `pick-${p.root}`, onclick: () => { state.view = p.root; render(); } }, p.name))));
     }
+
+    // What each session starts with, by source. Measured for the scanned project only.
+    const L = state.view === data.scope ? data.sessionLoad : null;
     const b = budget();
-    if (!b) {
-      return h('div', { class: 'hero' }, context, h('h1', null, `No skill listing found for ${projectName(state.view)}`),
-        h('p', { class: 'lede' }, 'Claude Code records which skills keep their description when a session starts. None of the scanned sessions in this project did, so packlight cannot tell which skills were pushed out.'), loadLine, hookLine);
+    const parts: { key: string; label: string; value: number; kind: Kind; pushed?: boolean }[] = L ? [
+      { key: 'mcp', label: 'MCP tool names', value: L.mcpTools, kind: 'mcp' as Kind },
+      { key: 'skills', label: 'skill listing', value: L.skillListing, kind: 'skill' as Kind },
+      { key: 'hooks', label: 'hook text', value: L.hookStart, kind: 'hook' as Kind },
+      { key: 'instr', label: 'MCP instructions', value: L.mcpInstructions, kind: 'mcp' as Kind },
+    ].filter(p => p.value > 0).sort((x, y) => y.value - x.value) : [];
+    const total = parts.reduce((n, p) => n + p.value, 0);
+    if (!total) {
+      if (!b) return h('div', { class: 'hero' }, context, h('h1', null, `Nothing measured for ${projectName(state.view)} yet`),
+        h('p', { class: 'lede' }, 'Claude Code records what a session starts with when it begins. None of the scanned sessions in this project did, so packlight cannot measure it.'));
+      const n = b.dropped.length;
+      return h('div', { class: 'hero' }, context,
+        h('h1', null, n ? `${n} skills pushed out of ${projectName(state.view)}'s skill listing` : `All ${n + b.withDescription.length} skills fit in ${projectName(state.view)}'s listing`),
+        n ? h('p', { class: 'hero-line' }, h('button', { class: 'btn', 'data-key': 'review-pushed', onclick: go('skill', true) }, `Show the ${n}`)) : null);
     }
-    const n = b.dropped.length;
-    const total = b.withDescription.length + n;
-    // Only skills and commands sit in the listing, so only they can bring descriptions back.
-    const suggested = suggestedInView().filter(i => i.kind === 'skill' || i.kind === 'command' || i.kind === 'plugin');
-    const after = projected(new Set(suggested.map(i => i.id)));
-    const back = after === null ? 0 : Math.max(0, n - after);
-    const bar = h('div', { class: 'budget', role: 'img', 'aria-label': n ? `${n} of ${total} skills listed without their description` : `All ${total} skills fit in the listing` },
-      h('i', { class: 'listed', style: `width:${(b.withDescription.length / Math.max(total, 1)) * 100}%` }),
-      n ? h('i', { class: 'dropped', style: `width:${(n / Math.max(total, 1)) * 100}%` }) : null,
-      n ? h('i', { class: 'edge', style: `left:calc(${(b.withDescription.length / Math.max(total, 1)) * 100}% - 1px)` }) : null);
+    const bar = h('div', { class: 'loadbar', role: 'img', 'aria-label': `Each session starts with about ${chars(total)} chars: ${parts.map(p => `${chars(p.value)} ${p.label}`).join(', ')}` },
+      parts.map(p => h('i', { class: `seg seg-${p.key}`, style: `width:${(p.value / total) * 100}%` })));
+    const legend = h('div', { class: 'legend' }, parts.map(p => h('button', { class: 'legend-item', 'data-key': `load-${p.key}`, onclick: go(p.kind, false) },
+      h('i', { class: `sw seg-${p.key}`, 'aria-hidden': 'true' }), h('b', { class: 'num' }, chars(p.value)), ` ${p.label}`)));
     return h('div', { class: 'hero' }, context,
-      h('h1', null, n ? `${n} skills pushed out of ${projectName(state.view)}'s skill listing` : `All ${total} skills fit in ${projectName(state.view)}'s listing`),
-      bar,
-      h('div', { class: 'budget-legend' }, h('span', null, `Listing budget: ${chars(b.listingChars)} chars`), n ? h('span', null, 'pushed out') : null),
-      n ? h('p', { class: 'hero-line' },
-        h('span', null, `${b.withDescription.length} listed · ${n} dropped${suggested.length && back ? ` · archiving the ${plural(suggested.length, 'suggested skill or plugin', 'suggested skills and plugins')} brings about ${back} back (projected)` : ''}`),
-        h('button', { class: data.fix.ids.length && state.view === data.scope ? 'btn' : 'btn primary', 'data-key': 'review-pushed', onclick: () => { state.kind = 'skill'; state.pushedOutOnly = true; state.suggestedOnly = false; render(); say(`Showing ${plural(n, 'skill')} pushed out of the listing`); } }, `Review the ${n}`)) : null,
-      loadLine, hookLine);
+      h('h1', null, `Each session in ${projectName(state.view)} starts with about ${chars(total)} chars of setup`),
+      bar, legend, fixRow());
   }
 
-  // The one-click fix (report/fix.ts): every suggested item, plugin-level, run by `packlight fix` after one question.
-  function fixBlock(): Child {
+  // The one-click fix (report/fix.ts) as one line; everything else opens below it on demand.
+  function fixRow(): Child {
     const f = data.fix;
     if (state.view !== data.scope || (!f.ids.length && !f.byHand?.items.length)) return null;
-    const gains = [
-      f.descriptionsBack ? `${plural(f.descriptionsBack, 'skill gets its', 'skills get their')} description back` : null,
-      f.sessionCharsSaved > 0 ? `${chars(f.sessionCharsSaved)} fewer chars every session` : null,
-    ].filter((x): x is string => !!x);
-    const ONE: Record<string, string> = { skill: 'skill', command: 'command', agent: 'agent', hook: 'hook', plugin: 'plugin', mcp: 'MCP server' };
-    const kinds = KINDS.filter(([k]) => f.byKind[k]).map(([k, label]) => (f.byKind[k] === 1 ? `1 ${ONE[k]}` : `${f.byKind[k]} ${k === 'mcp' ? label : label.toLowerCase()}`)).join(', ');
     const hand = f.byHand;
-    const handGains = hand ? [
-      hand.descriptionsBack > f.descriptionsBack ? `${hand.descriptionsBack} descriptions back` : null,
-      hand.sessionCharsSaved > f.sessionCharsSaved ? `${chars(hand.sessionCharsSaved)} fewer chars` : null,
-    ].filter((x): x is string => !!x) : [];
+    const gains = (back: number, saved: number): string[] => [
+      back ? `${plural(back, 'skill description')} back` : null,
+      saved > 0 ? `${chars(saved)} fewer chars per session` : null,
+    ].filter((x): x is string => !!x);
+    const headline = f.ids.length
+      ? [h('b', null, `Archive ${plural(f.ids.length, 'unused item')}`), gains(f.descriptionsBack, f.sessionCharsSaved).map(g => ` · ${g}`)]
+      : [h('b', null, `${plural(hand!.items.length, 'unused item')} only you can remove`), gains(hand!.descriptionsBack, hand!.sessionCharsSaved).map(g => ` · ${g}`)];
+    const kinds = KINDS.filter(([k]) => f.byKind[k]).map(([k, label]) => (f.byKind[k] === 1 ? `1 ${ONE[k]}` : `${f.byKind[k]} ${k === 'mcp' ? label : label.toLowerCase()}`)).join(', ');
     const groups = new Map<string, NonNullable<typeof hand>['items']>();
     for (const i of hand?.items ?? []) groups.set(i.where, [...(groups.get(i.where) ?? []), i]);
-    return h('section', { class: 'fix', 'aria-labelledby': 'fix-title' },
-      f.ids.length ? [
-        h('div', { class: 'fix-row' },
-          h('div', null,
-            h('h2', { id: 'fix-title' }, `Archive ${plural(f.ids.length, 'unused item')} in one go`),
-            h('p', { class: 'muted' }, `${kinds}. None was used since it was installed, over at least ${data.thresholds.sessions} sessions and ${data.thresholds.days} days. Everything can be restored.`),
-            gains.length ? h('p', { class: 'fix-gain' }, `${gains.join(' · ')} (projected)`) : h('p', { class: 'fix-gain' }, 'Little change in what Claude loads each session (projected); this mostly clears unused items.')),
-          h('button', { class: 'btn primary', 'data-key': 'fix', 'aria-expanded': String(state.fixOpen), onclick: () => { state.fixOpen = !state.fixOpen; render(); } }, 'Fix it')),
-        state.fixOpen ? h('div', { class: 'fix-run', role: 'region', 'aria-label': 'Run the fix' },
+    return h('section', { class: 'fix', 'aria-label': 'Fix' },
+      h('div', { class: 'fix-row' },
+        h('p', null, ...headline, h('span', { class: 'muted' }, ' (projected)')),
+        h('button', { class: f.ids.length ? 'btn primary' : 'btn', 'data-key': 'fix', 'aria-expanded': String(state.fixOpen), onclick: () => { state.fixOpen = !state.fixOpen; render(); } }, f.ids.length ? 'Fix it' : 'Show them')),
+      state.fixOpen ? h('div', { class: 'fix-run', role: 'region', 'aria-label': 'Run the fix' },
+        f.ids.length ? [
+          h('p', { class: 'muted' }, `${kinds}. None was used since it was installed, over at least ${data.thresholds.sessions} sessions and ${data.thresholds.days} days. Everything can be restored.`),
           h('p', null, 'Run this in your terminal. It scans again, shows the plan and asks once before changing anything.'),
           h('div', { class: 'codebox' }, h('code', null, data.messages.fixCommand), h('button', { class: 'btn small', 'data-key': 'copy-fix', onclick: copy(data.messages.fixCommand, 'the fix command') }, 'Copy')),
           h('button', { class: 'linkish', 'data-key': 'fix-review', onclick: () => {
             for (const id of f.ids) state.marks[id] = 'archive';
             persist(); state.tab = 'picks'; render(); say(`Marked ${plural(f.ids.length, 'item')} for archive`);
-          } }, 'Review them one by one instead')) : null,
-      ] : h('h2', { id: 'fix-title' }, 'Unused items only you can remove'),
-      hand?.items.length ? h('details', { class: 'byhand' },
-        h('summary', null, `${f.ids.length ? 'Also unused, but only you can remove' : 'Remove by hand'}: ${plural(hand.items.length, 'item')}${handGains.length ? ` (with them: ${handGains.join(', ')})` : ''}`),
-        [...groups].map(([where, list]) => h('p', null, h('b', null, where), ` ${list.map(i => i.kind === 'plugin' ? `${i.name} (${plural(i.turnsOff, 'part')})` : i.name).join(', ')}`))) : null);
+          } }, 'Review them one by one instead'),
+        ] : null,
+        hand?.items.length ? h('div', { class: 'byhand' },
+          h('p', null, h('b', null, f.ids.length ? `Also unused, but only you can remove: ${plural(hand.items.length, 'item')}` : 'Remove these where they were added'),
+            f.ids.length && gains(hand.descriptionsBack, hand.sessionCharsSaved).length ? h('span', { class: 'muted' }, ` (with them: ${gains(hand.descriptionsBack, hand.sessionCharsSaved).join(', ')})`) : null),
+          [...groups].map(([where, list]) => h('p', null, h('b', null, where), ` ${list.map(i => i.kind === 'plugin' ? `${i.name} (${plural(i.turnsOff, 'part')})` : i.name).join(', ')}`))) : null) : null);
   }
 
   function sinceStrip(): Child {
@@ -347,6 +333,7 @@ export function clientMain(): void {
     const archivedSince = data.archived.filter(a => a.archivedAt > p.createdAt && a.status !== 'restored').length;
     const b = budget();
     const predicted = b && p.budgetTimestamp && b.timestamp && b.timestamp <= p.createdAt;
+    if (!archivedSince && p.hookStartChars === data.current.hookStartChars && (!b || p.dropped === b.dropped.length)) return null;
     return h('p', { class: 'strip', 'aria-label': 'Since the last scan' },
       h('span', null, `Since the ${date(p.createdAt)} scan:`),
       h('span', null, 'hook chars per session start ', h('b', null, `${chars(p.hookStartChars)} → ${chars(data.current.hookStartChars)}`)),
@@ -355,14 +342,7 @@ export function clientMain(): void {
   }
 
   function itemsPanel(): Child[] {
-    const items = visibleItems();
-    const ambiguous = items.filter(i => i.usage.ambiguous).length;
-    const notObserved = items.filter(i => i.kind !== 'instructions' && !i.usage.total).length;
-    const strip = h('p', { class: 'strip' },
-      h('span', null, h('b', null, String(items.length)), ' installed'),
-      data.hasLogs ? h('span', null, h('b', null, String(notObserved)), ` not observed in ${plural(data.sessions, 'session')}`) : h('span', null, 'usage unavailable'),
-      ambiguous ? h('span', null, h('b', null, String(ambiguous)), ' usage ambiguous') : null);
-    return [...banners(), hero(), fixBlock(), sinceStrip(), strip, h('div', { class: 'browse' }, kindNav(), h('div', { class: 'kindpane' }, kindHeader(), filters(), table()))];
+    return [...banners(), hero(), sinceStrip(), h('div', { class: 'browse' }, kindNav(), h('div', { class: 'kindpane' }, kindHeader(), filters(), table()))];
   }
 
   // A sidebar of kinds on wide screens; the same buttons wrap into a row on narrow ones.
@@ -385,14 +365,20 @@ export function clientMain(): void {
     const unseen = of.filter(i => !i.usage.total).length;
     const sug = of.filter(i => i.suggestion.suggested).length;
     const pushed = state.kind === 'skill' || state.kind === 'command' ? of.filter(i => listingStatus(i) === 'pushed out').length : 0;
+    const toolHooks = state.kind === 'hook' ? of.filter(i => i.enabled && /ToolUse$/.test(i.hook?.event ?? '') && i.usage.hook?.firings) : [];
+    const toolHookChars = toolHooks.reduce((n, i) => n + i.usage.hook!.injectedChars / i.usage.hook!.firings, 0);
     const stat = (n: number | string, text: string): HTMLElement => h('span', null, h('b', { class: 'num' }, String(n)), ` ${text}`);
     return h('div', { class: 'kindhead' },
       h('h2', null, label, h('span', { class: 'kc num' }, String(of.length))),
       h('p', { class: 'kinddesc' }, KIND_TEXT[state.kind]),
       h('p', { class: 'kindstats' },
-        standing ? stat(`${chars(standing)} chars`, state.kind === 'instructions' ? 'loaded in their projects' : 'loaded every session') : null,
+        state.kind === 'skill' && budget()
+          ? stat(`${chars(budget()!.listingChars)} chars`, `in the listing every session (full text would be ${chars(standing)})`)
+          : standing ? stat(`${chars(standing)} chars`, state.kind === 'instructions' ? 'loaded in their projects' : 'loaded every session') : null,
         state.kind !== 'instructions' && data.hasLogs ? stat(unseen, 'not observed') : null,
-        pushed ? stat(pushed, 'pushed out of the listing') : null,
+        pushed ? h('span', null, h('b', { class: 'num' }, String(pushed)), ' listed by name only (the listing is full) ',
+          h('button', { class: 'linkish', 'data-key': 'review-pushed', 'aria-pressed': String(state.pushedOutOnly), onclick: () => { state.pushedOutOnly = !state.pushedOutOnly; state.suggestedOnly = false; render(); say(state.pushedOutOnly ? `Showing ${plural(pushed, 'skill')} listed by name only` : 'Showing all skills'); } }, state.pushedOutOnly ? 'Show all' : `Show the ${pushed}`)) : null,
+        toolHookChars ? stat(`${chars(toolHookChars)} chars`, 'added per tool call') : null,
         sug ? stat(sug, 'suggested') : null));
   }
 
