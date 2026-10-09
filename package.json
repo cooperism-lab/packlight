@@ -4,6 +4,15 @@
   "private": true,
   "description": "See what your coding agent carries, keep what you use, archive the rest.",
   "license": "MIT",
+  "author": "Cooper Kao (https://github.com/cooperism-lab)",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/cooperism-lab/packlight.git"
+  },
+  "homepage": "https://github.com/cooperism-lab/packlight#readme",
+  "bugs": {
+    "url": "https://github.com/cooperism-lab/packlight/issues"
+  },
   "type": "module",
   "bin": {
     "packlight": "dist/cli.js"

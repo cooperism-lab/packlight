@@ -172,12 +172,19 @@ export function clientMain(): void {
   function render(): void {
     const focusKey = keyOf(document.activeElement);
     location.replace(`#${new URLSearchParams({ tab: state.tab, ...(state.view !== data.scope ? { project: state.view } : {}) }).toString()}`);
-    root.replaceChildren(masthead(), tabs(), h('main', { id: 'main' }, h('div', { class: 'wrap' }, panel())), picksBar());
+    root.replaceChildren(masthead(), tabs(), h('main', { id: 'main' }, h('div', { class: 'wrap' }, panel())), footer(), picksBar());
     const again = focusKey ? root.querySelector<HTMLElement>(`[data-key="${CSS.escape(focusKey)}"]`) : null;
     if (again) {
       again.focus();
       if (again instanceof HTMLInputElement) again.setSelectionRange(again.value.length, again.value.length);
     }
+  }
+
+  function footer(): HTMLElement {
+    return h('footer', { class: 'foot' }, h('div', { class: 'wrap' },
+      h('span', null, 'packlight, built by Cooper Kao'),
+      h('a', { href: 'https://github.com/cooperism-lab/packlight', rel: 'noreferrer', target: '_blank' }, 'github.com/cooperism-lab/packlight'),
+      h('span', null, 'This page runs only on your computer and sends nothing.')));
   }
 
   function logo(): Element {

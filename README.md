@@ -36,6 +36,10 @@ Planned releases:
 - **v0.2:** overlap detection, plus a packlight skill that rates items and writes "which one" cards. This is the public launch.
 - **v0.3:** Codex adapter.
 
+## Who made it
+
+Built by Cooper Kao ([cooperism-lab](https://github.com/cooperism-lab)). Issues and pull requests are welcome.
+
 ## Licence
 
-MIT
+MIT © 2026 Cooper Kao

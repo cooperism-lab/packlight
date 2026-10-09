@@ -40,7 +40,10 @@ nav.tabs .wrap { display: flex; gap: 4px; overflow-x: auto; scrollbar-width: non
 nav.tabs .wrap::-webkit-scrollbar { display: none; }
 [role="tab"] { padding: 12px 12px 10px; border-bottom: 2px solid transparent; color: var(--ink-2); white-space: nowrap; font-weight: 500; }
 [role="tab"][aria-selected="true"] { color: var(--ink); border-bottom-color: var(--ink); }
-main .wrap { padding-top: 28px; padding-bottom: 120px; }
+main .wrap { padding-top: 28px; padding-bottom: 48px; }
+footer.foot { border-top: 1px solid var(--line); color: var(--ink-2); font-size: 13px; }
+footer.foot .wrap { display: flex; flex-wrap: wrap; gap: 4px 18px; padding-top: 16px; padding-bottom: 120px; }
+footer.foot a:visited { color: var(--ink-2); }
 .panel-title { font-size: 22px; font-weight: 600; letter-spacing: -0.01em; margin: 8px 0 6px; }
 .lede { color: var(--ink-2); font-size: 16px; max-width: 70ch; margin-bottom: 20px; }
 
@@ -174,7 +177,7 @@ textarea.picksjson { width: 100%; min-height: 120px; font: 12.5px var(--mono); }
   .items tr.detail td { padding-left: 12px; }
   .btn, .chip, .kind, .seg button, .disclose, [role="tab"], .search, .sortsel { min-height: 44px; }
   .disclose { width: 44px; }
-  main .wrap { padding-bottom: 140px; }
+  footer.foot .wrap { padding-bottom: 140px; }
   .picksbar { padding-left: 16px; padding-right: 16px; }
 }
 `;
