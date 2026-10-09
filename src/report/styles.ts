@@ -162,6 +162,8 @@ textarea.picksjson { width: 100%; min-height: 120px; font: 12.5px var(--mono); }
 .picksbar .count { font-weight: 600; }
 @media (prefers-reduced-motion: reduce) { .disclose svg { transition: none; } }
 
+/* A narrower sidebar just above the breakpoint, so wide system fonts (Linux, Windows) still fit the table. */
+@media (max-width: 1279px) { .browse { grid-template-columns: 168px minmax(0, 1fr); gap: 0 24px; } .items td.name { min-width: 150px; } }
 /* With the sidebar open, the source column goes first: the source already sits under each name. */
 @media (max-width: 1399px) { .col-source { display: none; } }
 @media (max-width: 1099px) { .col-source, .col-last { display: none; } .items td.name { min-width: 140px; } .items td, .items th { padding-left: 7px; padding-right: 7px; } }

@@ -49,8 +49,11 @@ for (const width of [320, 400, 720, 1100, 1280]) {
   test(`has no horizontal scroll at ${width} px (DR11)`, async ({ page }) => {
     await page.setViewportSize({ width, height: 800 });
     await open(page);
+    // A wide font, like Linux's default, so this fails on any machine when a layout only fits narrow fonts.
+    const wide = { content: 'body, button, input, select { font-family: Verdana, "DejaVu Sans", sans-serif !important; }' };
     for (const button of await page.getByRole('navigation', { name: 'Kinds' }).getByRole('button').all()) {
       await button.click();
+      await page.addStyleTag(wide);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), await button.textContent() ?? '').toBe(true);
     }
   });
