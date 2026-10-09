@@ -18,6 +18,8 @@ Claude Code loads every skill, agent, hook and MCP server you have installed int
 
 Claude Code only, for now; Codex support is planned.
 
+**[See a sample report →](https://cooperism-lab.github.io/packlight/)** (an invented setup, so you can click around before installing).
+
 You mark what to archive. `packlight apply` moves it out reversibly, and `packlight restore` brings it back.
 
 Everything runs locally: no telemetry, and no network calls from the CLI or the report.

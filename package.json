@@ -39,7 +39,8 @@
     "test": "vitest run",
     "scan": "node --import tsx src/cli.ts scan",
     "e2e": "npm run build && playwright test",
-    "prepublishOnly": "npm run typecheck && npm test && npm run build"
+    "prepublishOnly": "npm run typecheck && npm test && npm run build",
+    "demo": "npm run build && node --import tsx scripts/build-demo.mts"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
