@@ -6,7 +6,8 @@ import { dirname, join } from 'node:path';
  * 12 skills, 3 commands, 4 agents, 5 hooks, 3 plugins and 6 MCP servers.
  * It is generated so absolute paths are right on every OS.
  */
-export const EXPECTED_COUNTS = { skill: 12, command: 3, agent: 4, hook: 5, plugin: 3, mcp: 6, instructions: 2 } as const;
+// mcp: 6 configured, plus 1 claude.ai connector known only from the session's tool list.
+export const EXPECTED_COUNTS = { skill: 12, command: 3, agent: 4, hook: 5, plugin: 3, mcp: 7, instructions: 2 } as const;
 
 export const EXPECTED_SKILLS_BY_SOURCE = {
   personal: 6,
@@ -156,6 +157,12 @@ function writeLogs(claude: string, home: string, project: string): void {
       attachment: { type: 'hook_additional_context', hookName: 'PreToolUse:Bash', hookEvent: 'PreToolUse', toolUseID: 'tu-1', content: ['abcdefghij'] } },
     { type: 'attachment', timestamp: '2026-09-28T09:59:00Z', cwd: project, version: '2.1.290',
       attachment: { type: 'skill_listing', isInitial: true, skillCount: 3, names: ['alpha', 'beta', 'kit:kit-a'], content: '- alpha: The alpha skill.\n- beta\n- kit:kit-a (kit-a): Kit skill A.' } },
+    // The session's tool list: Claude Code's own tool, three servers packlight knows, and a connector no one called.
+    { type: 'attachment', timestamp: '2026-09-28T09:59:01Z', cwd: project, version: '2.1.290',
+      attachment: { type: 'deferred_tools_delta', addedNames: ['WebFetch', 'mcp__localdb__query', 'mcp__localdb__write', 'mcp__github__issue', 'mcp__plugin_kit_kitdb__get', 'mcp__0a1b2c3d-0000-4000-8000-000000000001__search_flows'],
+        addedLines: ['WebFetch', 'mcp__localdb__query', 'mcp__localdb__write', 'mcp__github__issue', 'mcp__plugin_kit_kitdb__get', 'mcp__0a1b2c3d-0000-4000-8000-000000000001__search_flows'], removedNames: [] } },
+    { type: 'attachment', timestamp: '2026-09-28T09:59:02Z', cwd: project, version: '2.1.290',
+      attachment: { type: 'mcp_instructions_delta', addedNames: ['github'], addedBlocks: ['## github\nUse the issue tool for bugs.'], removedNames: [] } },
     // No cwd: inherits the project from the line above (eng A3).
     tool('Skill', { skill: 'beta' }, '2026-09-28T10:08:00Z'),
   ]));

@@ -37,6 +37,7 @@ test('leads with the listing budget for the scanned project (DR1)', async ({ pag
   await open(page);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText("1 skills pushed out of proj's skill listing");
   await expect(page.getByRole('img', { name: '1 of 3 skills listed without their description' })).toBeVisible();
+  await expect(page.getByText(/Each session starts with about .* MCP tool names \(5 tools\)/)).toBeVisible();
   await page.getByRole('button', { name: 'Review the 1' }).click();
   await expect(page.getByRole('status').first()).toHaveText('Showing 1 of 13');
 });

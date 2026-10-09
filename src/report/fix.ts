@@ -18,7 +18,7 @@ export interface FixPlan {
   listing: { before: ListingProjection; after: ListingProjection; observedAt: string | null } | null;
   /** Skills that get their description back in the listing. */
   descriptionsBack: number;
-  /** Fewer characters in every session: the listing, agent descriptions and session-start hook text. */
+  /** Fewer characters in every session: the listing, agent descriptions, MCP tool lists and session-start hook text. */
   sessionCharsSaved: number;
   /** Unused items packlight may not remove; the totals count them on top of the archive (cumulative). */
   byHand: { items: ByHand[]; descriptionsBack: number; sessionCharsSaved: number } | null;
@@ -100,7 +100,8 @@ export function fixPlan(inv: Inventory, sug: Map<string, Suggestion>, keptIds: S
       listing = after;
     }
     const goneItems = inv.items.filter(i => g.has(i.id));
-    const agentChars = goneItems.filter(i => i.kind === 'agent').reduce((n, i) => n + i.standingChars, 0);
+    // Agent descriptions and MCP tool names and instructions load every session in full; skills go through the listing above.
+    const agentChars = goneItems.filter(i => i.kind === 'agent' || i.kind === 'mcp').reduce((n, i) => n + i.standingChars, 0);
     const hookChars = goneItems.filter(i => i.kind === 'hook' && i.hook?.event === 'SessionStart' && i.usage.hook?.firings)
       .reduce((n, i) => n + i.usage.hook!.injectedChars / i.usage.hook!.firings, 0);
     return { listing, descriptionsBack, sessionCharsSaved: Math.round((listing && before ? before.chars - listing.chars : 0) + agentChars + hookChars) };

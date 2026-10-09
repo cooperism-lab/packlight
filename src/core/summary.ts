@@ -29,6 +29,13 @@ export function summarize(inv: Inventory, ms: number): string {
   } else {
     out.push('Skill listing: no listing found in these logs.');
   }
+  const tl = inv.toolListing?.[inv.projectScope] ?? Object.values(inv.toolListing ?? {}).sort((a, b) => (a.timestamp ?? '').localeCompare(b.timestamp ?? '')).at(-1);
+  if (tl) {
+    const servers = Object.values(tl.servers);
+    const top = Object.entries(tl.servers).sort((a, b) => b[1].chars + b[1].instructionChars - a[1].chars - a[1].instructionChars).slice(0, 3)
+      .map(([k, s]) => `${s.label ?? (inv.items.find(i => i.kind === 'mcp' && i.logKeys.includes(k))?.description?.startsWith('Tools:') ? `${k.slice(0, 8)}… (${s.sample?.slice(0, 2).join(', ')})` : k)} ${chars(s.chars + s.instructionChars)}`);
+    out.push(`MCP tool list (${tl.timestamp?.slice(0, 10) ?? 'latest'}): ${servers.reduce((n, s) => n + s.tools, 0)} tools from ${servers.length} servers, ${chars(servers.reduce((n, s) => n + s.chars, 0))} chars of tool names and ${chars(servers.reduce((n, s) => n + s.instructionChars, 0))} of instructions every session. Largest: ${top.join(', ')}.`);
+  }
   const hooks = inv.items.filter(i => i.usage.hook && i.usage.hook.firings > 0)
     .sort((a, b) => b.usage.hook!.injectedChars - a.usage.hook!.injectedChars).slice(0, 5);
   if (hooks.length) {

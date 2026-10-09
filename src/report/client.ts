@@ -16,7 +16,7 @@ export function clientMain(): void {
     agent: 'Subagents Claude can hand work to. Their descriptions load every session.',
     hook: 'Scripts that run on events. Some add text to the session each time they fire.',
     plugin: 'Bundles of the other kinds. Archiving a plugin turns off every part of it.',
-    mcp: 'Tool servers Claude can call. Counted by tool calls.',
+    mcp: 'Tool servers Claude can call. Claude Code lists every tool\'s name at the start of each session, and some servers add instructions too, so an unused server still costs its load.',
     instructions: 'CLAUDE.md and similar files, loaded in full in their project. packlight never changes these.',
   };
   const METHOD_TEXT: Record<string, string> = {
@@ -247,8 +247,18 @@ export function clientMain(): void {
     const toolHooks = items.filter(i => i.kind === 'hook' && i.enabled && /ToolUse$/.test(i.hook?.event ?? '') && i.usage.hook && i.usage.hook.firings);
     const per = (list: ReportItem[]) => list.reduce((n, i) => n + i.usage.hook!.injectedChars / i.usage.hook!.firings, 0);
     const hookLine = h('p', { class: 'hero-line' },
-      h('span', null, 'Hooks add ', h('b', null, `${chars(per(startHooks))} chars`), ' per session start and ', h('b', null, `${chars(per(toolHooks))}`), ' per tool call'),
+      data.sessionLoad
+        ? h('span', null, 'Hooks also add ', h('b', null, `${chars(per(toolHooks))} chars`), ' per tool call')
+        : h('span', null, 'Hooks add ', h('b', null, `${chars(per(startHooks))} chars`), ' per session start and ', h('b', null, `${chars(per(toolHooks))}`), ' per tool call'),
       h('button', { class: 'btn', 'data-key': 'review-hooks', onclick: () => { state.kind = 'hook'; state.sort = 'cost'; state.suggestedOnly = false; state.pushedOutOnly = false; render(); } }, 'Review hooks'));
+    const L = data.sessionLoad;
+    const loadParts: [number, string][] = L ? ([
+      [L.mcpTools, `MCP tool names (${L.mcpToolCount} tools)`], [L.skillListing, 'skill listing'], [L.mcpInstructions, 'MCP instructions'], [L.hookStart, 'hook text'],
+    ] as [number, string][]).filter(([n]) => n > 0).sort((a, b) => b[0] - a[0]) : [];
+    const loadLine = loadParts.length ? h('p', { class: 'hero-line loadline' },
+      h('span', null, 'Each session starts with about ', h('b', null, `${chars(loadParts.reduce((n, [v]) => n + v, 0))} chars`), ': ',
+        loadParts.map(([v, label], k) => [k ? ' · ' : '', h('b', null, chars(v)), ` ${label}`])),
+      L!.mcpTools ? h('button', { class: 'btn', 'data-key': 'review-mcp', onclick: () => { state.kind = 'mcp'; state.sort = 'cost'; state.suggestedOnly = false; state.pushedOutOnly = false; render(); } }, 'Review MCP servers') : null) : null;
     const context = h('p', { class: 'context' },
       h('span', null, state.view === 'global' ? 'All projects' : projectName(state.view)),
       h('span', null, 'Claude Code'),
@@ -259,12 +269,12 @@ export function clientMain(): void {
     if (state.view === 'global') {
       const top = [...data.projects].sort((a, b) => b.sessions - a.sessions).slice(0, 5);
       return h('div', { class: 'hero' }, context, h('h1', null, 'Pick a project to see its listing budget'),
-        h('p', { class: 'hero-line' }, top.map(p => h('button', { class: 'btn', 'data-key': `pick-${p.root}`, onclick: () => { state.view = p.root; render(); } }, p.name))), hookLine);
+        h('p', { class: 'hero-line' }, top.map(p => h('button', { class: 'btn', 'data-key': `pick-${p.root}`, onclick: () => { state.view = p.root; render(); } }, p.name))), loadLine, hookLine);
     }
     const b = budget();
     if (!b) {
       return h('div', { class: 'hero' }, context, h('h1', null, `No skill listing found for ${projectName(state.view)}`),
-        h('p', { class: 'lede' }, 'Claude Code records which skills keep their description when a session starts. None of the scanned sessions in this project did, so packlight cannot tell which skills were pushed out.'), hookLine);
+        h('p', { class: 'lede' }, 'Claude Code records which skills keep their description when a session starts. None of the scanned sessions in this project did, so packlight cannot tell which skills were pushed out.'), loadLine, hookLine);
     }
     const n = b.dropped.length;
     const total = b.withDescription.length + n;
@@ -283,7 +293,7 @@ export function clientMain(): void {
       n ? h('p', { class: 'hero-line' },
         h('span', null, `${b.withDescription.length} listed · ${n} dropped${suggested.length && back ? ` · archiving the ${plural(suggested.length, 'suggested skill or plugin', 'suggested skills and plugins')} brings about ${back} back (projected)` : ''}`),
         h('button', { class: data.fix.ids.length && state.view === data.scope ? 'btn' : 'btn primary', 'data-key': 'review-pushed', onclick: () => { state.kind = 'skill'; state.pushedOutOnly = true; state.suggestedOnly = false; render(); say(`Showing ${plural(n, 'skill')} pushed out of the listing`); } }, `Review the ${n}`)) : null,
-      hookLine);
+      loadLine, hookLine);
   }
 
   // The one-click fix (report/fix.ts): every suggested item, plugin-level, run by `packlight fix` after one question.
@@ -462,7 +472,7 @@ export function clientMain(): void {
     }
     const cols = state.kind === 'hook'
       ? ['Firings', 'Chars per firing', 'p95']
-      : state.kind === 'plugin' ? ['Items', 'Last observed', 'Load'] : state.kind === 'mcp' ? ['Last observed', 'Tool calls'] : state.kind === 'instructions' ? ['Load'] : ['Last observed', 'Uses', 'Listing', 'Load'];
+      : state.kind === 'plugin' ? ['Items', 'Last observed', 'Load'] : state.kind === 'mcp' ? ['Last observed', 'Tool calls', 'Load'] : state.kind === 'instructions' ? ['Load'] : ['Last observed', 'Uses', 'Listing', 'Load'];
     const head = h('thead', null, h('tr', null, h('th', null, h('span', { class: 'sr' }, 'Details')), h('th', null, 'Mark'), h('th', { scope: 'col' }, 'Name'), h('th', { scope: 'col', class: 'col-2nd col-source' }, 'Source'), cols.map(c => h('th', { scope: 'col', class: `r col-2nd${c === 'Last observed' && cols.length === 4 ? ' col-last' : ''}` }, c))));
     const cells = (i: ReportItem): Child[] => {
       const ld = loadOf(i);
@@ -473,7 +483,7 @@ export function clientMain(): void {
         return [h('td', { class: 'r num col-2nd' }, u ? String(u.firings) : usageCell(i)), h('td', { class: 'r num col-2nd' }, u && u.firings ? `${chars(u.injectedChars / u.firings)} chars` : '—', u?.injectionShared ? h('span', { class: 'unit' }, 'shared') : null), h('td', { class: 'r num col-2nd' }, u && u.firings ? `${u.p95DurationMs} ms` : '—')];
       }
       if (state.kind === 'plugin') return [h('td', { class: 'r num col-2nd' }, String(memberCount(i))), h('td', { class: 'r col-2nd' }, date(i.usage.lastUsed)), loadCell];
-      if (state.kind === 'mcp') return [h('td', { class: 'r col-2nd' }, date(i.usage.lastUsed)), uses];
+      if (state.kind === 'mcp') return [h('td', { class: 'r col-2nd' }, date(i.usage.lastUsed)), uses, loadCell];
       if (state.kind === 'instructions') return [loadCell];
       const ls = listingStatus(i);
       return [h('td', { class: 'r col-2nd col-last' }, date(i.usage.lastUsed)), uses, h('td', { class: 'r col-2nd' }, ls ? h('span', { class: `tag ${ls === 'pushed out' ? 'red' : ''}` }, ls) : '—'), loadCell];
@@ -492,7 +502,7 @@ export function clientMain(): void {
       const tr = h('tr', { class: m === 'archive' ? 'marked-archive' : '' },
         h('td', null, h('button', { class: 'disclose', 'aria-expanded': String(open), 'aria-controls': `d-${i.id}`, 'aria-label': `Details for ${i.name}`, 'data-key': `open-${i.id}`, onclick: () => { open ? state.open.delete(i.id) : state.open.add(i.id); render(); } }, svg('M4 2l4 4-4 4'))),
         h('td', null, markControl(i)),
-        h('td', { class: 'name' }, h('div', { class: 'nm' }, i.name, tags), h('div', { class: 'sub' }, i.hook ? `${i.hook.event}${i.hook.matcher ? ` (${i.hook.matcher})` : ''} · ${i.source}` : i.source),
+        h('td', { class: 'name' }, h('div', { class: 'nm' }, i.name, tags), h('div', { class: 'sub' }, i.hook ? `${i.hook.event}${i.hook.matcher ? ` (${i.hook.matcher})` : ''} · ${i.source}` : i.source === 'claude.ai connector' && i.description ? `${i.source} · ${i.description}` : i.source),
           h('div', { class: 'narrow-meta' }, `${ld ? `${chars(ld.value)} chars ${ld.unit}` : usageCell(i)} · ${i.usage.lastUsed ? `last observed ${date(i.usage.lastUsed)}` : data.hasLogs ? 'not observed' : 'usage unavailable'}`),
           state.confirmPlugin === i.id && i.plugin ? impactBox(pluginItem(i.plugin)) : null),
         h('td', { class: 'col-2nd col-source muted' }, i.source),

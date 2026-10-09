@@ -30,6 +30,18 @@ describe('inventory on the fixture home (criterion 1)', () => {
     expect(counts).toEqual(EXPECTED_COUNTS);
   });
 
+  it('charges each MCP server its tool names and instructions from the session tool list', () => {
+    const mcp = (name: string) => inv.items.filter(i => i.kind === 'mcp' && i.name === name);
+    const line = (n: string) => n.length + 1;
+    expect(mcp('localdb').map(i => i.standingChars)).toEqual([line('mcp__localdb__query') + line('mcp__localdb__write')]);
+    expect(mcp('github').every(i => i.standingChars === line('mcp__github__issue') + '## github\nUse the issue tool for bugs.'.length)).toBe(true);
+    expect(mcp('kitdb')[0]!.standingChars).toBe(line('mcp__plugin_kit_kitdb__get'));
+    const connector = mcp('0a1b2c3d-0000-4000-8000-000000000001')[0]!;
+    expect(connector).toMatchObject({ source: 'claude.ai connector', description: 'Tools: search_flows', usage: expect.objectContaining({ total: 0 }), removal: { method: 'manual', where: 'claude.ai › Settings › Connectors' } });
+    const tl = Object.values(inv.toolListing ?? {})[0]!;
+    expect(tl.builtIn).toEqual({ tools: 1, chars: line('WebFetch') });
+  });
+
   it('finds skills by source', () => {
     const bySource: Record<string, number> = {};
     for (const i of inv.items.filter(i => i.kind === 'skill')) bySource[i.source] = (bySource[i.source] ?? 0) + 1;

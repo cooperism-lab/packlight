@@ -102,6 +102,24 @@ export interface BudgetObservation {
 
 export interface ListingLine { name: string; chars: number; described: boolean }
 
+/** One server's share of a session's tool list: its tool-name lines and its instructions block. */
+export interface ToolServerLoad { tools: number; chars: number; instructionChars: number; label?: string; /** A few tool names, to tell id-named connectors apart. */ sample?: string[] }
+
+/**
+ * The tool list one session was given: Claude Code names every deferred tool at session start, and MCP servers
+ * may add instructions. Logged as deltas; this is their sum for the session.
+ */
+export interface ToolListing {
+  sessionId: string;
+  timestamp: string | null;
+  version: string | null;
+  projectRoot: string | null;
+  /** By server key: the part of "mcp__<key>__<tool>", or the instructions' server name in the same form. */
+  servers: Record<string, ToolServerLoad>;
+  /** Claude Code's own deferred tools (no "mcp__" prefix). */
+  builtIn: { tools: number; chars: number };
+}
+
 export interface Inventory {
   schemaVersion: number;
   scanId: string;
@@ -121,6 +139,8 @@ export interface Inventory {
   sessions: SessionRecord[];
   /** Newest initial skill listing per project root ("global" key for no project). */
   budget: Record<string, BudgetObservation>;
+  /** Newest tool list per project root ("global" key for no project). */
+  toolListing?: Record<string, ToolListing>;
   /** Skills Claude Code itself counts as used (~/.claude.json skillUsage): it keeps their descriptions first. */
   listingPriority?: string[];
   /** Hook context the logs recorded but no hook line could be matched to. */

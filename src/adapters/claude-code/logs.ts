@@ -1,7 +1,7 @@
 import { createReadStream, readdirSync } from 'node:fs';
 import { basename, join, relative, sep } from 'node:path';
 import { createInterface } from 'node:readline';
-import type { BudgetObservation, ListingLine, SessionRecord } from '../../core/types.js';
+import type { BudgetObservation, ListingLine, SessionRecord, ToolListing } from '../../core/types.js';
 
 /** Top-level line types seen in Claude Code logs up to 2.1.293 (eng A2). Anything else is counted as an unknown shape. */
 export const KNOWN_LINE_TYPES = new Set([
@@ -36,6 +36,8 @@ export interface LogScan {
   hookFirings: HookFiring[];
   /** Initial skill listings, oldest first. */
   listings: BudgetObservation[];
+  /** One per main session file that logged a tool list, oldest first. */
+  toolListings: ToolListing[];
   unattributedHookChars: number;
   linesTotal: number;
   linesUnknownShape: number;
@@ -111,7 +113,7 @@ export function logFiles(projectsDir: string): { file: string; sessionId: string
 
 export async function scanLogs(projectsDir: string, opts: LogOptions): Promise<LogScan> {
   const scan: LogScan = {
-    sessions: [], skillUses: new Map(), agentUses: new Map(), mcpUses: new Map(), hookFirings: [], listings: [],
+    sessions: [], skillUses: new Map(), agentUses: new Map(), mcpUses: new Map(), hookFirings: [], listings: [], toolListings: [],
     unattributedHookChars: 0, linesTotal: 0, linesUnknownShape: 0, linesUnknownRelevant: 0, linesUnreadable: 0,
     unknownByVersion: {}, versions: [],
   };
@@ -130,6 +132,10 @@ export async function scanLogs(projectsDir: string, opts: LogOptions): Promise<L
     let version: string | null = null;
     // Hook success lines waiting for their context lines, keyed by tool call and hook name.
     const pending = new Map<string, HookFiring[]>();
+    // This session's tool list, built from its deltas (main session files only: subagents get their own lists).
+    let tools: ToolListing | null = null;
+    const toolLines = new Map<string, { key: string | null; chars: number }>();
+    const server = (key: string) => (tools!.servers[key] ??= { tools: 0, chars: 0, instructionChars: 0 });
 
     const rl = createInterface({ input: createReadStream(file, { encoding: 'utf8' }), crlfDelay: Infinity });
     for await (const line of rl) {
@@ -217,6 +223,46 @@ export async function scanLogs(projectsDir: string, opts: LogOptions): Promise<L
           const targets = producers.length ? producers : firings;
           if (targets.length === 1) targets[0]!.linkedChars += chars;
           else for (const f of targets) { f.linkedChars += chars / targets.length; f.shared = true; }
+        } else if ((at === 'deferred_tools_delta' || at === 'mcp_instructions_delta') && !isSubagent) {
+          tools ??= { sessionId, timestamp: ts, version, projectRoot: project, servers: {}, builtIn: { tools: 0, chars: 0 } };
+          const added: unknown[] = Array.isArray(a.addedNames) ? a.addedNames : [];
+          const removed: unknown[] = Array.isArray(a.removedNames) ? a.removedNames : [];
+          if (at === 'deferred_tools_delta') {
+            const lines: unknown[] = Array.isArray(a.addedLines) ? a.addedLines : [];
+            added.forEach((n, i) => {
+              if (typeof n !== 'string') return;
+              const text = typeof lines[i] === 'string' ? (lines[i] as string) : n;
+              const key = n.startsWith('mcp__') ? n.split('__')[1] ?? null : null;
+              const prev = toolLines.get(n);
+              if (prev) { if (prev.key) { server(prev.key).tools--; server(prev.key).chars -= prev.chars; } else { tools!.builtIn.tools--; tools!.builtIn.chars -= prev.chars; } }
+              toolLines.set(n, { key, chars: text.length + 1 });
+              if (key) {
+                const s = server(key);
+                s.tools++;
+                s.chars += text.length + 1;
+                const short = n.split('__').slice(2).join('__');
+                if (short && (s.sample ??= []).length < 4 && !s.sample.includes(short)) s.sample.push(short);
+              } else { tools!.builtIn.tools++; tools!.builtIn.chars += text.length + 1; }
+            });
+            for (const n of removed) {
+              const prev = typeof n === 'string' ? toolLines.get(n) : undefined;
+              if (!prev) continue;
+              toolLines.delete(n as string);
+              if (prev.key) { server(prev.key).tools--; server(prev.key).chars -= prev.chars; } else { tools!.builtIn.tools--; tools!.builtIn.chars -= prev.chars; }
+            }
+          } else {
+            const blocks: unknown[] = Array.isArray(a.addedBlocks) ? a.addedBlocks : [];
+            added.forEach((n, i) => {
+              if (typeof n !== 'string') return;
+              const block = typeof blocks[i] === 'string' ? (blocks[i] as string) : '';
+              const s = server(toolKey(n));
+              s.instructionChars = block.length;
+              // Connectors are named by id; their block's first line after the heading names the service.
+              const label = /^[^\n]*\n([^:\n]{1,60})[:\n]/.exec(block)?.[1]?.trim();
+              if (label) s.label = label;
+            });
+            for (const n of removed) if (typeof n === 'string' && tools.servers[toolKey(n)]) tools.servers[toolKey(n)]!.instructionChars = 0;
+          }
         } else if (at === 'skill_listing') {
           if (!Array.isArray(a.names) || typeof a.content !== 'string') { unknown(true); continue; }
           if (a.isInitial === false) continue;
@@ -227,8 +273,13 @@ export async function scanLogs(projectsDir: string, opts: LogOptions): Promise<L
         }
       }
     }
+    if (tools) {
+      for (const [k, v] of Object.entries(tools.servers)) if (v.tools <= 0 && v.instructionChars <= 0) delete tools.servers[k];
+      scan.toolListings.push(tools);
+    }
   }
 
+  scan.toolListings.sort((a, b) => (a.timestamp ?? '').localeCompare(b.timestamp ?? ''));
   for (const s of sessions.values()) {
     const { versionSet, ...rest } = s;
     scan.sessions.push({ ...rest, versions: [...versionSet].sort() });
@@ -237,6 +288,9 @@ export async function scanLogs(projectsDir: string, opts: LogOptions): Promise<L
   scan.versions = [...versions].sort(compareVersions);
   return scan;
 }
+
+/** A server name in the form tool names use: "plugin:x:y" and "My Server" become "plugin_x_y" and "My_Server". */
+export const toolKey = (name: string): string => name.replace(/[^A-Za-z0-9_-]/g, '_');
 
 export function compareVersions(a: string, b: string): number {
   const pa = a.split('.').map(Number);

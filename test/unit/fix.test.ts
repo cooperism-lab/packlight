@@ -33,11 +33,13 @@ describe('one-click fix plan', () => {
     const unused = item('old');
     const busy = item('busy', { usage: used });
     const agent = item('helper', { kind: 'agent', standingChars: 300 });
-    const p = plan(inventory([plugin, part, unused, busy, agent]));
-    expect(new Set(p.ids)).toEqual(new Set([plugin.id, unused.id, agent.id]));
-    expect(p.byKind).toEqual({ plugin: 1, skill: 1, agent: 1 });
-    expect(p.turnsOff).toBe(4);
-    expect(p.sessionCharsSaved).toBe(300);
+    const server = item('bigdb', { kind: 'mcp', standingChars: 400, removal: { method: 'mcp-extract' } });
+    const p = plan(inventory([plugin, part, unused, busy, agent, server]));
+    expect(new Set(p.ids)).toEqual(new Set([plugin.id, unused.id, agent.id, server.id]));
+    expect(p.byKind).toEqual({ plugin: 1, skill: 1, agent: 1, mcp: 1 });
+    expect(p.turnsOff).toBe(5);
+    // Agent descriptions and the server's tool list load every session in full.
+    expect(p.sessionCharsSaved).toBe(700);
   });
 
   it('counts only skills that stay as descriptions coming back', () => {

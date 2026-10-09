@@ -3,7 +3,7 @@ import { dirname, join, sep } from 'node:path';
 import { claudePaths, collectInventory, registeredProjects, skillUsageNames } from '../adapters/claude-code/inventory.js';
 import { compareVersions, scanLogs, type HookFiring, type LogScan, type Use } from '../adapters/claude-code/logs.js';
 import { itemId, valueFingerprint } from './hash.js';
-import { SCHEMA_VERSION, type BudgetObservation, type Inventory, type Item, type Usage } from './types.js';
+import { SCHEMA_VERSION, type BudgetObservation, type Inventory, type Item, type ToolListing, type Usage } from './types.js';
 
 export interface ScanOptions {
   home: string;
@@ -193,13 +193,44 @@ export async function scan(opts: ScanOptions): Promise<Inventory> {
 
   const starts = logs.sessions.map(s => s.start).filter((x): x is string => !!x).sort();
   const scope = projectOf(opts.cwd);
+  const projectScope = scope && roots.includes(scope) ? scope : 'global';
+
+  // Each MCP server's tool names and instructions, from the scope's newest tool list, load every session.
+  const toolListing: Record<string, ToolListing> = {};
+  for (const l of logs.toolListings) toolListing[l.projectRoot ?? 'global'] = l;
+  const tl = toolListing[projectScope] ?? logs.toolListings.at(-1);
+  if (tl) {
+    const norm = (k: string): string => k.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+    const byKey = new Map<string, Item[]>();
+    for (const it of items.filter(i => i.kind === 'mcp')) for (const k of it.logKeys) byKey.set(norm(k), [...(byKey.get(norm(k)) ?? []), it]);
+    for (const [key, load] of Object.entries(tl.servers)) {
+      let owners = byKey.get(norm(key));
+      if (!owners && UUID.test(key)) {
+        // A claude.ai connector no session called: listed all the same, and removable only on claude.ai.
+        const it: Item = {
+          id: itemId({ agent: 'claude-code', kind: 'mcp', source: 'claude.ai connector', name: key, path: null }),
+          agent: 'claude-code', kind: 'mcp', name: key, source: 'claude.ai connector', path: null, projectRoot: null, enabled: true,
+          description: '', descHash: '', standingChars: 0, targetFingerprint: valueFingerprint(key), firstSeen: null, firstSeenSource: null,
+          logKeys: [key], declarations: [], removal: { method: 'manual', where: 'claude.ai › Settings › Connectors' },
+          usage: { total: 0, last30: 0, lastUsed: null, byProject: {}, ambiguous: false, uncertain: false },
+        };
+        items.push(it);
+        owners = [it];
+      }
+      for (const it of owners ?? []) {
+        if (!it.enabled) continue;
+        it.standingChars = load.chars + load.instructionChars;
+        if (it.source === 'claude.ai connector' && !it.description) it.description = load.label ?? (load.sample?.length ? `Tools: ${load.sample.join(', ')}${load.tools > load.sample.length ? `, and ${load.tools - load.sample.length} more` : ''}` : '');
+      }
+    }
+  }
   return {
     schemaVersion: SCHEMA_VERSION,
     scanId: now.toISOString().replace(/[:.]/g, '-'),
     agent: 'claude-code',
     createdAt: now.toISOString(),
     home: opts.home,
-    projectScope: scope && roots.includes(scope) ? scope : 'global',
+    projectScope,
     window: { from: opts.since ?? starts[0] ?? null, to: now.toISOString() },
     sessionsInWindow: logs.sessions.filter(s => s.start).length,
     linesTotal: logs.linesTotal,
@@ -210,6 +241,7 @@ export async function scan(opts: ScanOptions): Promise<Inventory> {
     projects: roots.map(root => ({ root, sessions: sessionsByRoot.get(root) ?? 0, exists: existing.includes(root) })),
     sessions: logs.sessions,
     budget,
+    toolListing,
     listingPriority: skillUsageNames(paths),
     unattributedHookChars: Math.round(logs.unattributedHookChars),
     items,

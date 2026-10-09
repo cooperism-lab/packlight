@@ -36,6 +36,8 @@ export interface ReportData {
   items: ReportItem[];
   budget: Inventory['budget'];
   listingPriority: string[];
+  /** What the scope's newest session started with, by source (characters). */
+  sessionLoad: { skillListing: number; mcpTools: number; mcpToolCount: number; mcpInstructions: number; hookStart: number; observedAt: string | null } | null;
   /** The one-click fix: every suggested item, and what archiving them buys. */
   fix: FixPlan;
   thresholds: { sessions: number; days: number };
@@ -53,6 +55,21 @@ export function hookStartChars(inv: Inventory): number {
   return Math.round(inv.items
     .filter(i => i.kind === 'hook' && i.enabled && i.hook?.event === 'SessionStart' && i.usage.hook && i.usage.hook.firings > 0)
     .reduce((n, i) => n + i.usage.hook!.injectedChars / i.usage.hook!.firings, 0));
+}
+
+function sessionLoad(inv: Inventory): ReportData['sessionLoad'] {
+  const tl = inv.toolListing?.[inv.projectScope] ?? Object.values(inv.toolListing ?? {}).sort((a, b) => (a.timestamp ?? '').localeCompare(b.timestamp ?? '')).at(-1);
+  const b = newestBudget(inv);
+  if (!tl && !b) return null;
+  const servers = Object.values(tl?.servers ?? {});
+  return {
+    skillListing: b?.listingChars ?? 0,
+    mcpTools: servers.reduce((n, s) => n + s.chars, 0),
+    mcpToolCount: servers.reduce((n, s) => n + s.tools, 0),
+    mcpInstructions: servers.reduce((n, s) => n + s.instructionChars, 0),
+    hookStart: hookStartChars(inv),
+    observedAt: tl?.timestamp ?? b?.timestamp ?? null,
+  };
 }
 
 function previousScan(paths: PacklightPaths, inv: Inventory): Inventory | undefined {
@@ -73,6 +90,14 @@ function findings(inv: Inventory, items: ReportItem[]): Finding[] {
     out.push({ level: 'high', title: `Your default model is set to "${settings.model}"`, body: 'Every new session starts on a smaller model unless you pick another one. Remove "model" from ~/.claude/settings.json, or set it to the model you mean.' });
   }
   const perSession = (i: ReportItem) => (inv.sessionsInWindow ? i.usage.total / inv.sessionsInWindow : 0);
+  // Heavy servers barely used: their tool list loads every session whether or not a tool is called.
+  const heavy = items.filter(i => i.kind === 'mcp' && i.standingChars >= 2000 && i.usage.total > 0 && i.usage.total <= Math.max(2, inv.sessionsInWindow / 50))
+    .sort((a, b) => b.standingChars - a.standingChars);
+  if (heavy.length && inv.sessionsInWindow) {
+    const name = (i: ReportItem) => (i.source === 'claude.ai connector' && i.description ? `${i.name.slice(0, 8)}… (${i.description})` : i.name);
+    out.push({ level: 'medium', title: `${heavy.length} MCP server${heavy.length === 1 ? ' loads' : 's load'} a lot every session and ${heavy.length === 1 ? 'is' : 'are'} rarely called`,
+      body: heavy.map(i => `${name(i)}: ${(i.standingChars / 1000).toFixed(1)}k chars every session, called ${i.usage.total === 1 ? 'once' : `${i.usage.total} times`} in ${inv.sessionsInWindow} sessions.`).join(' ') + ' Turn one off where you added it and back on when you need it.' });
+  }
   for (const h of items.filter(i => i.kind === 'hook' && i.usage.hook && i.usage.hook.firings > 0)) {
     const u = h.usage.hook!;
     const per = u.injectedChars / u.firings;
@@ -155,6 +180,7 @@ export function buildReport(inv: Inventory, paths: PacklightPaths): ReportData {
     budget: inv.budget,
     listingPriority: inv.listingPriority ?? [],
     fix: fixPlan(inv, sug, new Set(Object.keys(keeps))),
+    sessionLoad: sessionLoad(inv),
     thresholds: { sessions: MIN_SESSIONS, days: MIN_DAYS },
     ...(prev ? { previous: { scanId: prev.scanId, createdAt: prev.createdAt, hookStartChars: hookStartChars(prev), dropped: prevBudget?.dropped.length ?? null, budgetTimestamp: prevBudget?.timestamp ?? null } } : {}),
     current: { hookStartChars: hookStartChars(inv) },

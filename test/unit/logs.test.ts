@@ -77,3 +77,27 @@ describe('skill listing (eng X8)', () => {
     ]);
   });
 });
+
+describe('tool list (deferred tools and MCP instructions)', () => {
+  it('sums a session\'s deltas per server, takes removed tools back out, and ignores subagents', async () => {
+    const d = mk();
+    mkdirSync(join(d, 'p', 's', 'subagents'), { recursive: true });
+    const at = (attachment: object, ts: string) => ({ type: 'attachment', timestamp: ts, cwd: '/w', version: '2.1.293', attachment });
+    writeFileSync(join(d, 'p', 's.jsonl'), jsonl([
+      at({ type: 'deferred_tools_delta', addedNames: ['Read', 'mcp__a__x', 'mcp__a__y', 'mcp__plugin_b_b__z'], addedLines: ['Read', 'mcp__a__x', 'mcp__a__y', 'mcp__plugin_b_b__z'], removedNames: [] }, '2026-09-01T00:00:00Z'),
+      at({ type: 'mcp_instructions_delta', addedNames: ['plugin:b:b'], addedBlocks: ['## plugin:b:b\nB Service: use it'], removedNames: [] }, '2026-09-01T00:00:01Z'),
+      at({ type: 'deferred_tools_delta', addedNames: [], addedLines: [], removedNames: ['mcp__a__y'] }, '2026-09-01T00:00:02Z'),
+    ]));
+    writeFileSync(join(d, 'p', 's', 'subagents', 'agent-1.jsonl'), jsonl([
+      at({ type: 'deferred_tools_delta', addedNames: ['mcp__c__q'], addedLines: ['mcp__c__q'], removedNames: [] }, '2026-09-01T00:00:03Z'),
+    ]));
+    const logs = await scanLogs(d, { projectOf: () => '/w' });
+    expect(logs.toolListings).toHaveLength(1);
+    const t = logs.toolListings[0]!;
+    expect(t.builtIn).toEqual({ tools: 1, chars: 5 });
+    expect(t.servers).toEqual({
+      a: { tools: 1, chars: 'mcp__a__x'.length + 1, instructionChars: 0, sample: ['x', 'y'] },
+      plugin_b_b: { tools: 1, chars: 'mcp__plugin_b_b__z'.length + 1, instructionChars: '## plugin:b:b\nB Service: use it'.length, sample: ['z'], label: 'B Service' },
+    });
+  });
+});

@@ -14,7 +14,7 @@ Everything runs locally: no telemetry, and no network calls from the CLI or the 
 
 ## Status
 
-Issues 1 to 3 are built (v0.1 scope). `packlight` scans your setup and opens a report: which skills Claude Code dropped from its listing, what each hook injects, and what was not observed in your sessions. Mark what to archive and press Save my picks; `packlight apply` archives it and `packlight restore` puts it back byte for byte, with a crash-safe journal.
+Issues 1 to 3 are built (v0.1 scope). `packlight` scans your setup and opens a report: what every session starts with (MCP tool names per server, the skill listing, MCP instructions, hook text), which skills Claude Code dropped from its listing, what each hook injects, and what was not observed in your sessions. Mark what to archive and press Save my picks; `packlight apply` archives it and `packlight restore` puts it back byte for byte, with a crash-safe journal.
 
 Or skip the marking: `packlight fix` scans again, shows a plan that archives every unused item (none used since it was installed, over at least 20 sessions and 14 days, nothing you kept) with its projected gain, and asks once. It also lists the unused items only you can remove, such as claude.ai synced skills and the Claude app's own plugins.
 
