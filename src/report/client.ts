@@ -10,6 +10,15 @@ export function clientMain(): void {
   type Kind = ReportItem['kind'];
   const data = JSON.parse(document.getElementById('packlight-data')!.textContent!) as ReportData;
   const KINDS: [Kind, string][] = [['skill', 'Skills'], ['command', 'Commands'], ['agent', 'Agents'], ['hook', 'Hooks'], ['plugin', 'Plugins'], ['mcp', 'MCP servers'], ['instructions', 'Instructions']];
+  const KIND_TEXT: Record<Kind, string> = {
+    skill: 'Each skill\'s name and description sit in a listing Claude sees every session. When the listing runs out of room, descriptions are dropped.',
+    command: 'Slash commands you type. Their descriptions share the skill listing.',
+    agent: 'Subagents Claude can hand work to. Their descriptions load every session.',
+    hook: 'Scripts that run on events. Some add text to the session each time they fire.',
+    plugin: 'Bundles of the other kinds. Archiving a plugin turns off every part of it.',
+    mcp: 'Tool servers Claude can call. Counted by tool calls.',
+    instructions: 'CLAUDE.md and similar files, loaded in full in their project. packlight never changes these.',
+  };
   const METHOD_TEXT: Record<string, string> = {
     move: 'Moved into packlight\'s archive', 'hook-extract': 'Cut out of their settings files', 'mcp-extract': 'Cut out of their config files',
     'plugin-disable': 'Plugins turned off', manual: 'Removed by hand (packlight records them)',
@@ -292,16 +301,43 @@ export function clientMain(): void {
       h('span', null, h('b', null, String(items.length)), ' installed'),
       data.hasLogs ? h('span', null, h('b', null, String(notObserved)), ` not observed in ${plural(data.sessions, 'session')}`) : h('span', null, 'usage unavailable'),
       ambiguous ? h('span', null, h('b', null, String(ambiguous)), ' usage ambiguous') : null);
-    return [...banners(), hero(), sinceStrip(), strip, filters(), table()];
+    return [...banners(), hero(), sinceStrip(), strip, h('div', { class: 'browse' }, kindNav(), h('div', { class: 'kindpane' }, kindHeader(), filters(), table()))];
+  }
+
+  // A sidebar of kinds on wide screens; the same buttons wrap into a row on narrow ones.
+  function kindNav(): HTMLElement {
+    const items = visibleItems();
+    return h('nav', { class: 'kinds', 'aria-label': 'Kinds' }, KINDS.map(([k, label]) => {
+      const of = items.filter(i => i.kind === k);
+      if (!of.length) return null;
+      const sug = of.filter(i => i.suggestion.suggested).length;
+      return h('button', { class: 'kind', 'aria-pressed': String(state.kind === k), 'data-key': `kind-${k}`, onclick: () => { state.kind = k; state.pushedOutOnly = false; render(); } },
+        h('span', { class: 'kl' }, label), h('span', { class: 'kn num' }, String(of.length)),
+        sug ? h('span', { class: 'ks' }, `${sug} suggested`) : null);
+    }));
+  }
+
+  function kindHeader(): HTMLElement {
+    const of = visibleItems().filter(i => i.kind === state.kind);
+    const label = KINDS.find(([k]) => k === state.kind)?.[1] ?? '';
+    const standing = state.kind === 'plugin' ? 0 : of.reduce((n, i) => n + (i.standingChars || 0), 0);
+    const unseen = of.filter(i => !i.usage.total).length;
+    const sug = of.filter(i => i.suggestion.suggested).length;
+    const pushed = state.kind === 'skill' || state.kind === 'command' ? of.filter(i => listingStatus(i) === 'pushed out').length : 0;
+    const stat = (n: number | string, text: string): HTMLElement => h('span', null, h('b', { class: 'num' }, String(n)), ` ${text}`);
+    return h('div', { class: 'kindhead' },
+      h('h2', null, label, h('span', { class: 'kc num' }, String(of.length))),
+      h('p', { class: 'kinddesc' }, KIND_TEXT[state.kind]),
+      h('p', { class: 'kindstats' },
+        standing ? stat(`${chars(standing)} chars`, state.kind === 'instructions' ? 'loaded in their projects' : 'loaded every session') : null,
+        state.kind !== 'instructions' && data.hasLogs ? stat(unseen, 'not observed') : null,
+        pushed ? stat(pushed, 'pushed out of the listing') : null,
+        sug ? stat(sug, 'suggested') : null));
   }
 
   function filters(): HTMLElement {
     const items = visibleItems();
     const suggested = items.filter(i => i.kind === state.kind && i.suggestion.suggested);
-    const kindChips = KINDS.map(([k, label]) => {
-      const n = items.filter(i => i.kind === k).length;
-      return n ? h('button', { class: 'chip', 'aria-pressed': String(state.kind === k), 'data-key': `kind-${k}`, onclick: () => { state.kind = k; state.pushedOutOnly = false; render(); } }, `${label} ${n}`) : null;
-    });
     const sugChip = h('button', { class: 'chip', 'aria-pressed': String(state.suggestedOnly), 'data-key': 'suggested', onclick: () => { state.suggestedOnly = !state.suggestedOnly; render(); } }, `Suggested (${suggested.length})`);
     const pushedChip = state.pushedOutOnly ? h('button', { class: 'chip', 'aria-pressed': 'true', 'data-key': 'pushed', onclick: () => { state.pushedOutOnly = false; render(); } }, 'Pushed out') : null;
     const search = h('input', { class: 'search', type: 'search', placeholder: 'Search names, descriptions', 'aria-label': 'Search names and descriptions', value: state.q, 'data-key': 'search',
@@ -313,7 +349,6 @@ export function clientMain(): void {
     const active = [state.suggestedOnly, state.pushedOutOnly, state.q !== ''].filter(Boolean).length;
     const tooFew = data.sessions < data.thresholds.sessions;
     return h('div', { class: 'filters' },
-      h('div', { class: 'chips' }, kindChips),
       search,
       h('button', { class: 'btn filters-toggle', 'aria-expanded': String(document.body.classList.contains('filters-open')), 'data-key': 'filters-toggle', onclick: () => { document.body.classList.toggle('filters-open'); render(); } }, `Filters (${active})`),
       h('div', { class: 'more chips' }, sugChip, pushedChip, sort),

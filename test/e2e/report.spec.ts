@@ -41,11 +41,14 @@ test('leads with the listing budget for the scanned project (DR1)', async ({ pag
   await expect(page.getByRole('status').first()).toHaveText('Showing 1 of 13');
 });
 
-for (const width of [320, 400, 720, 1280]) {
+for (const width of [320, 400, 720, 1100, 1280]) {
   test(`has no horizontal scroll at ${width} px (DR11)`, async ({ page }) => {
     await page.setViewportSize({ width, height: 800 });
     await open(page);
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    for (const button of await page.getByRole('navigation', { name: 'Kinds' }).getByRole('button').all()) {
+      await button.click();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), await button.textContent() ?? '').toBe(true);
+    }
   });
 }
 
@@ -152,4 +155,13 @@ test('offers saved picks in a browser that kept no marks (DE4) @carry', async ({
   await p2.getByRole('button', { name: 'Bring them over' }).click();
   await expect(p2.getByRole('tab', { name: 'Picks (1)' })).toBeVisible();
   await fresh.close();
+});
+
+test('switches kind from the sidebar and heads the table with that kind', async ({ page }) => {
+  await open(page);
+  const kinds = page.getByRole('navigation', { name: 'Kinds' });
+  await expect(page.getByRole('heading', { level: 2 }).first()).toContainText('Skills');
+  await kinds.getByRole('button', { name: /Hooks/ }).click();
+  await expect(kinds.getByRole('button', { name: /Hooks/ })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('heading', { level: 2 }).first()).toContainText('Hooks');
 });
