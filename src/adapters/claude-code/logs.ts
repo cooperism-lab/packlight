@@ -258,7 +258,9 @@ export async function scanLogs(projectsDir: string, opts: LogOptions): Promise<L
               const s = server(toolKey(n));
               s.instructionChars = block.length;
               // Connectors are named by id; their block's first line after the heading names the service.
-              const label = /^[^\n]*\n([^:\n]{1,60})[:\n]/.exec(block)?.[1]?.trim();
+              // Only a short name before a colon ("Claude Docs: living docs…") counts; a sentence is instructions, not a name.
+              const name = /^[^\n]*\n([^:\n.]{1,32}):/.exec(block)?.[1]?.trim();
+              const label = name && name.split(/\s+/).length <= 4 && !/^(use|prefer|always|never|when|do|call)\b/i.test(name) ? name : undefined;
               if (label) s.label = label;
             });
             for (const n of removed) if (typeof n === 'string' && tools.servers[toolKey(n)]) tools.servers[toolKey(n)]!.instructionChars = 0;

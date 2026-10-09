@@ -93,6 +93,11 @@ describe('tool list (deferred tools and MCP instructions)', () => {
     ]));
     const logs = await scanLogs(d, { projectOf: () => '/w' });
     expect(logs.toolListings).toHaveLength(1);
+    // A block that opens with a sentence gives no label (it is instructions, not the service's name).
+    const d2 = mk();
+    mkdirSync(join(d2, 'p'));
+    writeFileSync(join(d2, 'p', 's.jsonl'), jsonl([at({ type: 'mcp_instructions_delta', addedNames: ['x'], addedBlocks: ['## x\nUse Vercel tools and their input schemas. Always confirm: yes'], removedNames: [] }, '2026-09-01T00:00:00Z')]));
+    expect((await scanLogs(d2, { projectOf: () => '/w' })).toolListings[0]!.servers.x!.label).toBeUndefined();
     const t = logs.toolListings[0]!;
     expect(t.builtIn).toEqual({ tools: 1, chars: 5 });
     expect(t.servers).toEqual({
