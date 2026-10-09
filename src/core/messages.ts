@@ -9,6 +9,7 @@ export const INVOKE = process.env.npm_command === 'exec' ? 'npx packlight' : 'pa
 export const APPLY_COMMAND = `${INVOKE} apply`;
 export const REPORT_COMMAND = `${INVOKE} report`;
 export const PASTE_COMMAND = `${INVOKE} apply --paste`;
+export const FIX_COMMAND = `${INVOKE} fix`;
 
 export const MESSAGES = {
   picksSaved: 'Your browser should now have packlight-picks.json in your downloads folder. Nothing has changed yet.',

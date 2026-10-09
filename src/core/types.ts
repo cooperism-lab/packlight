@@ -69,7 +69,8 @@ export interface Item {
   hook?: { event: string; matcher: string | null; command: string };
   members?: Partial<Record<Kind, number>>;
   declarations: Declaration[];
-  removal: { method: RemovalMethod; where?: string };
+  /** suite: a folder other skills depend on (gstack); never moved, never offered by the fix. */
+  removal: { method: RemovalMethod; where?: string; suite?: true };
   usage: Usage;
 }
 
@@ -95,7 +96,11 @@ export interface BudgetObservation {
   listingChars: number;
   withDescription: string[];
   dropped: string[];
+  /** Every line in listing order, with its size as logged (multi-line descriptions included). */
+  entries?: ListingLine[];
 }
+
+export interface ListingLine { name: string; chars: number; described: boolean }
 
 export interface Inventory {
   schemaVersion: number;
@@ -116,6 +121,8 @@ export interface Inventory {
   sessions: SessionRecord[];
   /** Newest initial skill listing per project root ("global" key for no project). */
   budget: Record<string, BudgetObservation>;
+  /** Skills Claude Code itself counts as used (~/.claude.json skillUsage): it keeps their descriptions first. */
+  listingPriority?: string[];
   /** Hook context the logs recorded but no hook line could be matched to. */
   unattributedHookChars: number;
   items: Item[];

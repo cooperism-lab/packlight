@@ -165,3 +165,25 @@ test('switches kind from the sidebar and heads the table with that kind', async 
   await expect(kinds.getByRole('button', { name: /Hooks/ })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByRole('heading', { level: 2 }).first()).toContainText('Hooks');
 });
+
+test('offers the one-click fix with its projected gain, the command, and a by-hand list (fix)', async ({ page }) => {
+  rmSync(fx.dir, { recursive: true, force: true });
+  // The fixture home has too few sessions for anything to qualify, so the plan is supplied; report/fix.ts is unit-tested.
+  fx = await makeReport(undefined, data => {
+    const id = (name: string) => data.items.find(i => i.name === name)!.id;
+    data.fix = {
+      ids: [id('gamma'), id('beta')], byKind: { skill: 2 }, turnsOff: 2, listing: null, descriptionsBack: 3, sessionCharsSaved: 1500,
+      byHand: { items: [{ id: id('anthropic-skills:docs'), name: 'anthropic-skills:docs', kind: 'skill', where: 'claude.ai › Settings', turnsOff: 1 }], descriptionsBack: 5, sessionCharsSaved: 1600 },
+    };
+  });
+  await open(page);
+  const fix = page.getByRole('region', { name: 'Archive 2 unused items in one go' });
+  await expect(fix).toContainText('3 skills get their description back · 1.5k fewer chars every session (projected)');
+  await fix.getByRole('button', { name: 'Fix it' }).click();
+  await expect(page.getByRole('region', { name: 'Run the fix' })).toContainText('packlight fix');
+  expect((await new AxeBuilder({ page }).analyze()).violations.map(v => `${v.id} ${v.nodes.map(n => n.target.join(' ') + ' ' + n.failureSummary).join(' / ')}`)).toEqual([]);
+  await fix.getByText(/Also unused, but only you can remove: 1 item/).click();
+  await expect(fix).toContainText('claude.ai › Settings anthropic-skills:docs');
+  await page.getByRole('button', { name: 'Review them one by one instead' }).click();
+  await expect(page.getByRole('tab', { name: 'Picks (2)' })).toHaveAttribute('aria-selected', 'true');
+});

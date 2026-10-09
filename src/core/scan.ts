@@ -1,6 +1,6 @@
 import { existsSync } from 'node:fs';
 import { dirname, join, sep } from 'node:path';
-import { claudePaths, collectInventory, registeredProjects } from '../adapters/claude-code/inventory.js';
+import { claudePaths, collectInventory, registeredProjects, skillUsageNames } from '../adapters/claude-code/inventory.js';
 import { compareVersions, scanLogs, type HookFiring, type LogScan, type Use } from '../adapters/claude-code/logs.js';
 import { itemId, valueFingerprint } from './hash.js';
 import { SCHEMA_VERSION, type BudgetObservation, type Inventory, type Item, type Usage } from './types.js';
@@ -210,6 +210,7 @@ export async function scan(opts: ScanOptions): Promise<Inventory> {
     projects: roots.map(root => ({ root, sessions: sessionsByRoot.get(root) ?? 0, exists: existing.includes(root) })),
     sessions: logs.sessions,
     budget,
+    listingPriority: skillUsageNames(paths),
     unattributedHookChars: Math.round(logs.unattributedHookChars),
     items,
   };

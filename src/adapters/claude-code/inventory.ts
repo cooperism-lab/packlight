@@ -65,7 +65,7 @@ interface ItemInput {
   hook?: Item['hook'];
   members?: Item['members'];
   declarations?: Declaration[];
-  removal: { method: RemovalMethod; where?: string };
+  removal: Item['removal'];
   pointer?: string;
 }
 
@@ -119,7 +119,7 @@ function skillsIn(root: string, opts: { source: string; projectRoot: string | nu
       kind: 'skill', name, source: opts.source, path: dir, projectRoot: opts.projectRoot, enabled: opts.enabled,
       description, standingChars: opts.enabled ? listingChars(name, description) : 0,
       fingerprint: suite ? valueFingerprint({ dir, description }) : pathFingerprint(dir), ...seen, logKeys: [name], plugin: opts.plugin,
-      removal: suite ? { method: 'manual', where: `the ${name} suite's own uninstaller (other skills depend on ${dir})` } : { method: opts.method, where: opts.where },
+      removal: suite ? { method: 'manual', where: `the ${name} suite's own uninstaller (other skills depend on ${dir})`, suite: true } : { method: opts.method, where: opts.where },
     }));
   }
   return out;
@@ -419,6 +419,12 @@ export function collectInventory(paths: ClaudePaths, projectRoots: string[]): It
   }
 
   return items;
+}
+
+/** Skills Claude Code counts as used in ~/.claude.json: their descriptions go into the listing first. */
+export function skillUsageNames(paths: ClaudePaths): string[] {
+  const usage = readJson(paths.claudeJson)?.skillUsage;
+  return usage && typeof usage === 'object' ? Object.keys(usage) : [];
 }
 
 /** Project roots Claude Code itself registered in ~/.claude.json. */

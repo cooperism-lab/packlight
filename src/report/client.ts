@@ -3,7 +3,7 @@
 // a text node through h() (CEO F4); nothing is ever assigned to innerHTML.
 import type { ReportData, ReportItem } from './model.js';
 
-declare const projectDropped: (entries: { name: string; lineChars: number; nameChars: number; uses: number }[], budgetChars: number) => number;
+declare const simulateListing: (entries: { name: string; fullChars: number; nameChars: number; priority: boolean }[], budgetChars: number) => { chars: number; described: number; dropped: number; describedNames: string[] };
 
 export function clientMain(): void {
   type Mark = 'archive' | 'keep' | 'unkeep';
@@ -73,6 +73,7 @@ export function clientMain(): void {
     sort: 'cost',
     open: new Set<string>(),
     confirmPlugin: null as string | null,
+    fixOpen: false,
     marks: {} as Record<string, Mark>,
     saved: false,
     downloadFailed: null as string | null,
@@ -150,13 +151,18 @@ export function clientMain(): void {
   function projected(gone: Set<string>): number | null {
     const b = budget();
     if (!b) return null;
+    // Same model as the CLI's fix plan (report/fix.ts listingEntries): logged order, Claude Code's used skills first.
     const byKey = new Map<string, ReportItem>();
-    for (const i of visibleItems()) for (const k of i.logKeys) byKey.set(k, i);
-    const entries = [...b.withDescription, ...b.dropped].map(name => {
-      const it = byKey.get(name);
-      return { name, it, lineChars: it?.standingChars || name.length + 40, nameChars: name.length + 3, uses: it?.usage.total ?? 0 };
+    for (const i of data.items) for (const k of i.logKeys) if (!byKey.has(k)) byKey.set(k, i);
+    const priority = new Set(data.listingPriority);
+    const lines = b.entries ?? [...b.withDescription.map(name => ({ name, chars: 0, described: true })), ...b.dropped.map(name => ({ name, chars: 0, described: false }))];
+    const entries = lines.map(l => {
+      const it = byKey.get(l.name);
+      const nameChars = l.name.length + 3;
+      const full = l.described && l.chars ? l.chars : it?.standingChars ? it.standingChars : l.chars || nameChars;
+      return { name: l.name, it, nameChars, fullChars: Math.max(full, nameChars), priority: priority.has(l.name) || !it };
     }).filter(e => !(e.it && (gone.has(e.it.id) || (e.it.plugin && gone.has(markTarget(e.it).id)))));
-    return projectDropped(entries, b.listingChars);
+    return simulateListing(entries, b.dropped.length ? b.listingChars : Number.MAX_SAFE_INTEGER).dropped;
   }
 
   // ------------------------------------------------------------------ rendering
@@ -276,8 +282,45 @@ export function clientMain(): void {
       h('div', { class: 'budget-legend' }, h('span', null, `Listing budget: ${chars(b.listingChars)} chars`), n ? h('span', null, 'pushed out') : null),
       n ? h('p', { class: 'hero-line' },
         h('span', null, `${b.withDescription.length} listed · ${n} dropped${suggested.length && back ? ` · archiving the ${plural(suggested.length, 'suggested skill or plugin', 'suggested skills and plugins')} brings about ${back} back (projected)` : ''}`),
-        h('button', { class: 'btn primary', 'data-key': 'review-pushed', onclick: () => { state.kind = 'skill'; state.pushedOutOnly = true; state.suggestedOnly = false; render(); say(`Showing ${plural(n, 'skill')} pushed out of the listing`); } }, `Review the ${n}`)) : null,
+        h('button', { class: data.fix.ids.length && state.view === data.scope ? 'btn' : 'btn primary', 'data-key': 'review-pushed', onclick: () => { state.kind = 'skill'; state.pushedOutOnly = true; state.suggestedOnly = false; render(); say(`Showing ${plural(n, 'skill')} pushed out of the listing`); } }, `Review the ${n}`)) : null,
       hookLine);
+  }
+
+  // The one-click fix (report/fix.ts): every suggested item, plugin-level, run by `packlight fix` after one question.
+  function fixBlock(): Child {
+    const f = data.fix;
+    if (state.view !== data.scope || (!f.ids.length && !f.byHand?.items.length)) return null;
+    const gains = [
+      f.descriptionsBack ? `${plural(f.descriptionsBack, 'skill gets its', 'skills get their')} description back` : null,
+      f.sessionCharsSaved > 0 ? `${chars(f.sessionCharsSaved)} fewer chars every session` : null,
+    ].filter((x): x is string => !!x);
+    const kinds = KINDS.filter(([k]) => f.byKind[k]).map(([k, label]) => `${f.byKind[k]} ${label.toLowerCase()}`).join(', ');
+    const hand = f.byHand;
+    const handGains = hand ? [
+      hand.descriptionsBack > f.descriptionsBack ? `${hand.descriptionsBack} descriptions back` : null,
+      hand.sessionCharsSaved > f.sessionCharsSaved ? `${chars(hand.sessionCharsSaved)} fewer chars` : null,
+    ].filter((x): x is string => !!x) : [];
+    const groups = new Map<string, NonNullable<typeof hand>['items']>();
+    for (const i of hand?.items ?? []) groups.set(i.where, [...(groups.get(i.where) ?? []), i]);
+    return h('section', { class: 'fix', 'aria-labelledby': 'fix-title' },
+      f.ids.length ? [
+        h('div', { class: 'fix-row' },
+          h('div', null,
+            h('h2', { id: 'fix-title' }, `Archive ${plural(f.ids.length, 'unused item')} in one go`),
+            h('p', { class: 'muted' }, `${kinds}. None was used since it was installed, over at least ${data.thresholds.sessions} sessions and ${data.thresholds.days} days. Everything can be restored.`),
+            gains.length ? h('p', { class: 'fix-gain' }, `${gains.join(' · ')} (projected)`) : h('p', { class: 'fix-gain' }, 'Little change in what Claude loads each session (projected); this mostly clears unused items.')),
+          h('button', { class: 'btn primary', 'data-key': 'fix', 'aria-expanded': String(state.fixOpen), onclick: () => { state.fixOpen = !state.fixOpen; render(); } }, 'Fix it')),
+        state.fixOpen ? h('div', { class: 'fix-run', role: 'region', 'aria-label': 'Run the fix' },
+          h('p', null, 'Run this in your terminal. It scans again, shows the plan and asks once before changing anything.'),
+          h('div', { class: 'codebox' }, h('code', null, data.messages.fixCommand), h('button', { class: 'btn small', 'data-key': 'copy-fix', onclick: copy(data.messages.fixCommand, 'the fix command') }, 'Copy')),
+          h('button', { class: 'linkish', 'data-key': 'fix-review', onclick: () => {
+            for (const id of f.ids) state.marks[id] = 'archive';
+            persist(); state.tab = 'picks'; render(); say(`Marked ${plural(f.ids.length, 'item')} for archive`);
+          } }, 'Review them one by one instead')) : null,
+      ] : h('h2', { id: 'fix-title' }, 'Unused items only you can remove'),
+      hand?.items.length ? h('details', { class: 'byhand' },
+        h('summary', null, `${f.ids.length ? 'Also unused, but only you can remove' : 'Remove by hand'}: ${plural(hand.items.length, 'item')}${handGains.length ? ` (with them: ${handGains.join(', ')})` : ''}`),
+        [...groups].map(([where, list]) => h('p', null, h('b', null, where), ` ${list.map(i => i.kind === 'plugin' ? `${i.name} (${plural(i.turnsOff, 'part')})` : i.name).join(', ')}`))) : null);
   }
 
   function sinceStrip(): Child {
@@ -301,7 +344,7 @@ export function clientMain(): void {
       h('span', null, h('b', null, String(items.length)), ' installed'),
       data.hasLogs ? h('span', null, h('b', null, String(notObserved)), ` not observed in ${plural(data.sessions, 'session')}`) : h('span', null, 'usage unavailable'),
       ambiguous ? h('span', null, h('b', null, String(ambiguous)), ' usage ambiguous') : null);
-    return [...banners(), hero(), sinceStrip(), strip, h('div', { class: 'browse' }, kindNav(), h('div', { class: 'kindpane' }, kindHeader(), filters(), table()))];
+    return [...banners(), hero(), fixBlock(), sinceStrip(), strip, h('div', { class: 'browse' }, kindNav(), h('div', { class: 'kindpane' }, kindHeader(), filters(), table()))];
   }
 
   // A sidebar of kinds on wide screens; the same buttons wrap into a row on narrow ones.

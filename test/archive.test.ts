@@ -104,6 +104,24 @@ describe('archive and restore round trip (criteria 6 and 8)', () => {
 });
 
 describe('apply safety', () => {
+  it('asks one question for the whole plan when fix runs it, and a no changes nothing', async () => {
+    const inv = await scanAndSave(fx.home, fx.project, root);
+    const picks = writePicks(join(dir, 'p.json'), inv.scanId, [
+      { id: find(inv, 'skill', 'alpha').id, action: 'archive' },
+      { id: hookByCommand(inv, '/usr/local/bin/notes.sh', 'user settings').id, action: 'archive' },
+    ]);
+    const before = snapshot(fx.home, ['.packlight']);
+    const asked: string[] = [];
+    const no = await run(picks, { yes: false, singleQuestion: 'Archive these 2 items?', claudeRunning: () => true, confirm: async q => { asked.push(q); return false; } });
+    expect(asked).toEqual(['\nArchive these 2 items?']);
+    expect(no.exitCode).toBe(1);
+    expect(snapshot(fx.home, ['.packlight'])).toEqual(before);
+    asked.length = 0;
+    const yes = await run(picks, { yes: false, singleQuestion: 'Archive these 2 items?', confirm: async q => { asked.push(q); return true; } });
+    expect(asked).toHaveLength(1);
+    expect(yes.archived.map(a => a.item.name).sort()).toEqual(['alpha', expect.stringContaining('notes')]);
+  });
+
   it('changes nothing when every group is declined, but still records keeps (criterion 7, DE3)', async () => {
     const inv = await scanAndSave(fx.home, fx.project, root);
     const before = snapshot(fx.home, ['.packlight']);

@@ -1,7 +1,7 @@
 import { createReadStream, readdirSync } from 'node:fs';
 import { basename, join, relative, sep } from 'node:path';
 import { createInterface } from 'node:readline';
-import type { BudgetObservation, SessionRecord } from '../../core/types.js';
+import type { BudgetObservation, ListingLine, SessionRecord } from '../../core/types.js';
 
 /** Top-level line types seen in Claude Code logs up to 2.1.293 (eng A2). Anything else is counted as an unknown shape. */
 export const KNOWN_LINE_TYPES = new Set([
@@ -64,19 +64,28 @@ function push(map: Map<string, Use[]>, key: string, use: Use): void {
   if (list) list.push(use); else map.set(key, [use]);
 }
 
-function listingSplit(content: string, names: string[]): { withDescription: string[]; dropped: string[] } {
+function listingSplit(content: string, names: string[]): { withDescription: string[]; dropped: string[]; entries: ListingLine[] } {
   const byLength = [...names].sort((a, b) => b.length - a.length);
   const withDescription: string[] = [];
   const dropped: string[] = [];
+  const entries: ListingLine[] = [];
+  let current: ListingLine | null = null;
   for (const line of content.split('\n')) {
-    if (!line.startsWith('- ')) continue;
+    if (!line.startsWith('- ')) {
+      // A description that runs over several lines: its size belongs to the entry above.
+      if (current) current.chars += line.length + 1;
+      continue;
+    }
     const body = line.slice(2);
     const name = byLength.find(n => body === n || body.startsWith(`${n}:`) || body.startsWith(`${n} (`));
-    if (!name) continue;
+    if (!name) { current = null; continue; }
     const rest = body.slice(name.length).replace(/^ \([^)]*\)/, '');
-    (rest.startsWith(': ') ? withDescription : dropped).push(name);
+    const described = rest.startsWith(': ');
+    (described ? withDescription : dropped).push(name);
+    current = { name, chars: line.length + 1, described };
+    entries.push(current);
   }
-  return { withDescription, dropped };
+  return { withDescription, dropped, entries };
 }
 
 /** Every .jsonl under the projects folder; subagent transcripts belong to their parent session. */

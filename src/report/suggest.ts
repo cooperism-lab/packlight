@@ -73,23 +73,24 @@ export function suggestions(inv: Inventory, keptIds: Set<string>): Map<string, S
   return result;
 }
 
-/** One line in the skill listing, for the budget projection. */
-export interface ListingEntry { name: string; lineChars: number; nameChars: number; uses: number }
+/** One line of the skill listing, for projecting it after some skills go. */
+export interface ListingEntry { name: string; fullChars: number; nameChars: number; priority: boolean }
 
 /**
- * Projects how many skills would lose their description once some are archived: Claude Code fills a fixed
- * budget with descriptions, most used first, and lists the rest by name only. The budget is the listing size
- * Claude Code logged. A projection, always labelled as one.
+ * Projects the skill listing Claude Code builds: every name first, then the descriptions of skills it counts as
+ * used (and its own bundled skills), then the rest in listing order, each one that still fits under the size cap.
+ * This matches the listings packlight has observed (2.1.29x); it is a projection and always labelled as one.
+ * Self-contained: the report serialises it with Function.toString.
  */
-export function projectDropped(entries: ListingEntry[], budgetChars: number): number {
-  const sorted = [...entries].sort((a, b) => b.uses - a.uses || a.name.localeCompare(b.name));
-  let used = sorted.reduce((n, e) => n + e.nameChars, 0);
-  let withDesc = 0;
-  for (const e of sorted) {
-    const extra = e.lineChars - e.nameChars;
-    if (used + extra > budgetChars) break;
-    used += extra;
-    withDesc++;
+export function simulateListing(entries: ListingEntry[], budgetChars: number): { chars: number; described: number; dropped: number; describedNames: string[] } {
+  let used = entries.reduce((n, e) => n + e.nameChars, 0);
+  const describedNames: string[] = [];
+  for (const pass of [true, false]) {
+    for (const e of entries) {
+      if (e.priority !== pass) continue;
+      const extra = e.fullChars - e.nameChars;
+      if (extra > 0 && used + extra <= budgetChars) { used += extra; describedNames.push(e.name); }
+    }
   }
-  return sorted.length - withDesc;
+  return { chars: used, described: describedNames.length, dropped: entries.length - describedNames.length, describedNames };
 }

@@ -1,7 +1,7 @@
 import { clientMain } from './client.js';
 import type { ReportData } from './model.js';
 import { STYLES } from './styles.js';
-import { projectDropped } from './suggest.js';
+import { simulateListing } from './suggest.js';
 
 /** No network at all (acceptance criterion 5): inline style and script only, images only as data: URIs. */
 export const CSP = "default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:";
@@ -40,7 +40,7 @@ export function renderReport(data: ReportData): string {
 <div id="live" class="sr" aria-live="polite"></div>
 <script id="packlight-data" type="application/json">${scriptSafeJson(data)}</script>
 <script>
-const projectDropped = ${projectDropped.toString()};
+const simulateListing = ${simulateListing.toString()};
 (${clientMain.toString()})();
 </script>
 </body>

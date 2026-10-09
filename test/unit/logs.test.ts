@@ -68,5 +68,12 @@ describe('skill listing (eng X8)', () => {
     }]));
     const logs = await scanLogs(d, { projectOf: () => '/w' });
     expect(logs.listings).toEqual([expect.objectContaining({ withDescription: ['a', 'p:b'], dropped: ['c', 'p:b-long'], projectRoot: '/w', skillCount: 4 })]);
+    // In listing order, each with its size; a line that is not a list item belongs to the entry above it.
+    expect(logs.listings[0]!.entries).toEqual([
+      { name: 'a', chars: '- a: Does a.\n'.length, described: true },
+      { name: 'p:b', chars: '- p:b (bee): Does b.\n'.length, described: true },
+      { name: 'c', chars: '- c\n'.length, described: false },
+      { name: 'p:b-long', chars: '- p:b-long\n'.length + 'TRIGGER — free text that is not a list item\n'.length, described: false },
+    ]);
   });
 });

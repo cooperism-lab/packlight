@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Inventory, Item, SessionRecord } from '../../src/core/types.js';
-import { projectDropped, suggestions } from '../../src/report/suggest.js';
+import { simulateListing, suggestions } from '../../src/report/suggest.js';
 
 const SCAN = '2026-10-01T00:00:00.000Z';
 const DAY = 86_400_000;
@@ -92,15 +92,21 @@ describe('suggestions (design DR6, eng delta DE1, DE5-DE7)', () => {
   });
 });
 
-describe('listing projection', () => {
-  const e = (name: string, uses: number) => ({ name, lineChars: 100, nameChars: 10, uses });
+describe('listing projection (matches Claude Code 2.1.29x listings)', () => {
+  const e = (name: string, fullChars: number, priority = false) => ({ name, fullChars, nameChars: 10, priority });
 
-  it('fills the budget with the most-used descriptions first', () => {
-    // 4 names (40 chars) + 3 descriptions (3 × 90) = 310 fits a 320 budget; the 4th description does not.
-    expect(projectDropped([e('a', 5), e('b', 4), e('c', 3), e('d', 0)], 320)).toBe(1);
+  it('counts every name, then fills descriptions for used skills first, then the rest in order while they fit', () => {
+    // Names: 4 × 10 = 40. Budget 200 leaves 160: "d" (used, +90) first, then "a" (+50) fits, "b" (+90) does not, "c" (+10) still does.
+    const r = simulateListing([e('a', 60), e('b', 100), e('c', 20), e('d', 100, true)], 200);
+    expect(r.describedNames).toEqual(['d', 'a', 'c']);
+    expect(r).toMatchObject({ chars: 190, described: 3, dropped: 1 });
   });
 
-  it('brings descriptions back when skills are archived', () => {
-    expect(projectDropped([e('a', 5), e('b', 4), e('c', 3)], 320)).toBe(0);
+  it('brings descriptions back when skills ahead of them go', () => {
+    expect(simulateListing([e('b', 100), e('c', 20)], 200).dropped).toBe(0);
+  });
+
+  it('never describes an entry with no description to show', () => {
+    expect(simulateListing([e('init', 10)], 1000)).toMatchObject({ described: 0, dropped: 1 });
   });
 });

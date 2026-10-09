@@ -4,7 +4,7 @@ import { homedir } from 'node:os';
 import { join, sep } from 'node:path';
 import { execFileSync, spawn } from 'node:child_process';
 import { createInterface } from 'node:readline/promises';
-import { apply, claudeCodeRunning, findPicksFile, STALE_PICKS } from './archive/apply.js';
+import { apply, claudeCodeRunning, findPicksFile, readKeeps, STALE_PICKS } from './archive/apply.js';
 import { downloadsDir, newestScan, packlightPaths, readScan } from './archive/paths.js';
 import { archiveList, restore } from './archive/restore.js';
 import { scan } from './core/scan.js';
@@ -12,7 +12,9 @@ import { INVOKE, MESSAGES, PASTE_COMMAND } from './core/messages.js';
 import { summarize } from './core/summary.js';
 import type { Inventory } from './core/types.js';
 import { buildReport } from './report/model.js';
+import { fixPlan, type FixPlan } from './report/fix.js';
 import { renderReport } from './report/render.js';
+import { MIN_DAYS, MIN_SESSIONS, suggestions } from './report/suggest.js';
 
 const USAGE = `packlight: see what your coding agent carries
 
@@ -20,6 +22,7 @@ Usage:
   packlight                 scan, write the report and open it
   packlight report [--scan <id>] [--no-open]
   packlight scan [--home <dir>] [--since <YYYY-MM-DD>] [--out <dir>] [--json]
+  packlight fix [--yes]     archive everything suggested, after one question
   packlight apply [picks.json | --paste] [--yes] [--home <dir>] [--out <dir>]
   packlight restore <id…> | --all [--home <dir>] [--out <dir>]
   packlight archive list [--home <dir>] [--out <dir>]
@@ -97,6 +100,35 @@ async function scanAndSave(home: string, packlightRoot: string, since?: string):
   return { inventory, ms: Date.now() - started, file };
 }
 
+const KIND_WORD: Record<string, [string, string]> = { skill: ['skill', 'skills'], command: ['command', 'commands'], agent: ['agent', 'agents'], hook: ['hook', 'hooks'], plugin: ['plugin', 'plugins'], mcp: ['MCP server', 'MCP servers'] };
+const count = (n: number, kind: string): string => `${n} ${KIND_WORD[kind]?.[n === 1 ? 0 : 1] ?? kind}`;
+const kchars = (n: number): string => (n >= 1000 ? `${(n / 1000).toFixed(1).replace(/\.0$/, '')}k` : String(n));
+
+/** What the fix will do and buy, in the words the report uses for its Fix button. */
+function fixSummary(plan: FixPlan, sessions: number): string[] {
+  if (!plan.ids.length) return ['Nothing to fix: no item passes the rules for archiving (unused since it was installed, over at least ' + `${MIN_SESSIONS} sessions and ${MIN_DAYS} days, not kept, not shared).`];
+  const kinds = Object.entries(plan.byKind).map(([k, n]) => count(n!, k)).join(', ');
+  const gains = [
+    plan.descriptionsBack ? `${plan.descriptionsBack} skill${plan.descriptionsBack === 1 ? '' : 's'} get their description back in Claude's skill listing` : null,
+    plan.sessionCharsSaved > 0 ? `${kchars(plan.sessionCharsSaved)} fewer characters in every session` : null,
+  ].filter(Boolean);
+  return [
+    `\nFix: archive ${plan.ids.length} unused items (${kinds}${plan.turnsOff > plan.ids.length ? `; ${plan.turnsOff} items with plugin parts` : ''}).`,
+    `None was used in the ${sessions} sessions scanned since it was installed. Everything can be restored.`,
+    gains.length ? `Projected: ${gains.join('; ')}.` : 'Projected: little change in what Claude loads each session; this mostly clears unused items from your setup.',
+  ];
+}
+
+function printByHand(plan: FixPlan, out: (line: string) => void): void {
+  const h = plan.byHand;
+  if (!h?.items.length) return;
+  const gains = [h.descriptionsBack > plan.descriptionsBack ? `${h.descriptionsBack} descriptions back in all` : null, h.sessionCharsSaved > plan.sessionCharsSaved ? `${kchars(h.sessionCharsSaved)} fewer characters per session in all` : null].filter(Boolean);
+  out(`\nAlso unused, but only you can remove these${gains.length ? ` (with them: ${gains.join(', ')})` : ''}:`);
+  const byWhere = new Map<string, typeof h.items>();
+  for (const i of h.items) byWhere.set(i.where, [...(byWhere.get(i.where) ?? []), i]);
+  for (const [where, list] of byWhere) out(`  ${where}: ${list.map(i => i.kind === 'plugin' ? `${i.name} (${i.turnsOff} parts)` : i.name).join(', ')}`);
+}
+
 async function main(argv: string[]): Promise<number> {
   const [command] = argv;
   if (command === '--help' || command === '-h' || command === 'help') { console.log(USAGE); return 0; }
@@ -169,6 +201,39 @@ async function main(argv: string[]): Promise<number> {
       return r.exitCode;
     } catch (err) {
       console.error((err as Error).message === STALE_PICKS ? STALE_PICKS : `packlight: ${(err as Error).message}`);
+      return 1;
+    }
+  }
+
+  if (command === 'fix') {
+    if (!existsSync(join(home, '.claude'))) {
+      console.error(`No Claude Code setup found: ${join(home, '.claude')} does not exist. Pass --home to scan another folder.`);
+      return 1;
+    }
+    const yes = argv.includes('--yes');
+    if (!yes && !process.stdin.isTTY) { console.error('fix asks before it changes anything. Run it in a terminal, or pass --yes.'); return 2; }
+    // Always from a fresh scan: the plan never acts on an old picture of your setup.
+    const { inventory } = await scanAndSave(home, packlightRoot, arg(argv, '--since'));
+    const paths = packlightPaths(home, packlightRoot);
+    const kept = new Set(Object.keys(readKeeps(paths).keeps));
+    const plan = fixPlan(inventory, suggestions(inventory, kept), kept);
+    writeReport(home, packlightRoot, inventory);
+    for (const line of fixSummary(plan, inventory.sessionsInWindow)) out(line);
+    if (!plan.ids.length) { printByHand(plan, out); return 0; }
+    mkdirSync(packlightRoot, { recursive: true });
+    const picksFile = join(packlightRoot, `fix-picks-${inventory.scanId}.json`);
+    writeFileSync(picksFile, JSON.stringify({ scanId: inventory.scanId, picks: plan.ids.map(id => ({ id, action: 'archive' })) }, null, 1));
+    out('');
+    try {
+      const r = await apply({ home, packlightRoot, picksFile, yes, confirm, claudeRunning: claudeCodeRunning, out, crash, singleQuestion: `Archive these ${plan.ids.length} items?` });
+      if (r.archived.length) {
+        out(`\nDone. Undo everything with \`${INVOKE} restore --all\`, or one item with the restore command above.`);
+        out(`Claude Code reads its setup when a session starts: start a new session, then run \`${INVOKE}\` to measure the result.`);
+      }
+      printByHand(plan, out);
+      return r.exitCode;
+    } catch (err) {
+      console.error(`packlight: ${(err as Error).message}`);
       return 1;
     }
   }

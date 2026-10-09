@@ -57,6 +57,8 @@ export interface ApplyOptions {
   out: (line: string) => void;
   now?: () => Date;
   crash?: (point: string) => void;
+  /** Ask this one question for the whole plan instead of one per method group (packlight fix). */
+  singleQuestion?: string;
 }
 
 export interface ApplyResult {
@@ -167,7 +169,7 @@ async function applyLocked(opts: ApplyOptions, paths: PacklightPaths, now: () =>
   for (const [method, list] of groups) {
     out(`\n${GROUP_TEXT[method](list.length)}:`);
     for (const { item, steps } of list) {
-      const impact = item.kind === 'plugin' && item.members ? ` (${Object.entries(item.members).map(([k, n]) => `${n} ${n === 1 ? k : KIND_PLURAL[k as Kind]}`).join(', ')})` : '';
+      const impact = item.kind === 'plugin' && item.members && Object.keys(item.members).length ? ` (${Object.entries(item.members).map(([k, n]) => `${n} ${n === 1 ? k : KIND_PLURAL[k as Kind]}`).join(', ')})` : '';
       const where = steps.map(s => ('file' in s ? s.file : 'path' in s ? s.path : s.where)).join('; ');
       out(`  ${item.name}${impact}  ${where}`);
     }
@@ -178,13 +180,17 @@ async function applyLocked(opts: ApplyOptions, paths: PacklightPaths, now: () =>
   const touchesSettings = plan.some(p => p.steps.some(s => 'file' in s));
   if (touchesSettings && opts.claudeRunning()) {
     out('\nClaude Code is running. It can rewrite its settings files while packlight edits them; packlight checks each file just before writing, but a write in the same instant could still be lost.');
-    if (!opts.yes && !(await opts.confirm('Continue anyway?'))) { out('Stopped. Nothing was changed.'); return { ...result, exitCode: 1 }; }
+    if (!opts.yes && !opts.singleQuestion && !(await opts.confirm('Continue anyway?'))) { out('Stopped. Nothing was changed.'); return { ...result, exitCode: 1 }; }
+  }
+  if (opts.singleQuestion && plan.length && !opts.yes && !(await opts.confirm(`\n${opts.singleQuestion}`))) {
+    out('Stopped. Nothing was changed.');
+    return { ...result, exitCode: 1 };
   }
 
   // One question per method group (acceptance criterion 7); "no" leaves that group untouched.
   const approved: { item: Item; steps: Step[] }[] = [];
   for (const [method, list] of groups) {
-    if (opts.yes || (await opts.confirm(`${GROUP_TEXT[method](list.length)}?`))) approved.push(...list);
+    if (opts.yes || opts.singleQuestion || (await opts.confirm(`${GROUP_TEXT[method](list.length)}?`))) approved.push(...list);
     else result.declined.push(method);
   }
 

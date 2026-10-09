@@ -61,10 +61,24 @@ main .wrap { padding-top: 28px; padding-bottom: 120px; }
 .btn { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 14px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); font-weight: 500; white-space: nowrap; }
 .btn:hover:not(:disabled) { background: var(--bg-2); }
 .btn.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+.btn.primary:hover:not(:disabled) { background: var(--accent); opacity: .86; }
 .btn.small { min-height: 30px; padding: 0 10px; font-size: 13px; }
 .strip { display: flex; flex-wrap: wrap; gap: 4px 18px; padding: 14px 0; border-bottom: 1px solid var(--line); color: var(--ink-2); }
 .strip b { color: var(--ink); font-weight: 600; }
 
+.fix { border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; margin: 20px 0 4px; background: var(--bg-2); }
+.fix-row { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: center; justify-content: space-between; }
+.fix-row > div { flex: 1 1 320px; }
+.fix h2 { font-size: 18px; font-weight: 650; letter-spacing: -0.01em; margin-bottom: 4px; }
+.fix .muted { max-width: 75ch; }
+.fix-gain { margin-top: 8px; font-weight: 600; color: var(--green); }
+.fix .btn.primary { min-height: 40px; padding: 0 20px; font-size: 15px; }
+.fix-run { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); display: grid; gap: 6px; justify-items: start; }
+.fix-run .codebox { width: 100%; background: var(--bg); }
+.byhand { margin-top: 12px; color: var(--ink-2); }
+.byhand summary { cursor: pointer; }
+.byhand p { margin-top: 6px; overflow-wrap: anywhere; }
+.byhand b { color: var(--ink); font-weight: 600; }
 .browse { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 0 36px; align-items: start; padding-top: 24px; }
 nav.kinds { position: sticky; top: 16px; display: grid; gap: 2px; }
 .kind { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 0 8px; text-align: left; padding: 8px 10px; border-radius: 6px; color: var(--ink-2); border-left: 2px solid transparent; }

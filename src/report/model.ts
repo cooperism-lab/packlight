@@ -3,8 +3,9 @@ import { basename, join } from 'node:path';
 import { readKeeps, findPicksFile, parsePicks } from '../archive/apply.js';
 import { listManifests } from '../archive/journal.js';
 import { downloadsDir, readScan, type PacklightPaths } from '../archive/paths.js';
-import { MESSAGES, APPLY_COMMAND, INVOKE, PASTE_COMMAND, REPORT_COMMAND } from '../core/messages.js';
+import { MESSAGES, APPLY_COMMAND, FIX_COMMAND, INVOKE, PASTE_COMMAND, REPORT_COMMAND } from '../core/messages.js';
 import type { Inventory, Item } from '../core/types.js';
+import { fixPlan, newestBudget, type FixPlan } from './fix.js';
 import { MIN_DAYS, MIN_SESSIONS, suggestions, type Suggestion } from './suggest.js';
 
 export interface ReportItem extends Omit<Item, 'declarations' | 'descHash' | 'targetFingerprint' | 'logKeys'> {
@@ -34,6 +35,9 @@ export interface ReportData {
   projects: { root: string; name: string; sessions: number }[];
   items: ReportItem[];
   budget: Inventory['budget'];
+  listingPriority: string[];
+  /** The one-click fix: every suggested item, and what archiving them buys. */
+  fix: FixPlan;
   thresholds: { sessions: number; days: number };
   previous?: { scanId: string; createdAt: string; hookStartChars: number; dropped: number | null; budgetTimestamp: string | null };
   current: { hookStartChars: number };
@@ -41,7 +45,7 @@ export interface ReportData {
   /** Marks from the newest picks file saved for the previous scan (design-delta DE4 reopened). */
   savedPicks?: { scanId: string; file: string; marks: Record<string, 'archive' | 'keep'> };
   findings: Finding[];
-  messages: typeof MESSAGES & { applyCommand: string; reportCommand: string; pasteCommand: string; invoke: string };
+  messages: typeof MESSAGES & { applyCommand: string; reportCommand: string; pasteCommand: string; fixCommand: string; invoke: string };
 }
 
 /** Characters hooks add at each session start: the sum of each start hook's average injection. */
@@ -61,10 +65,6 @@ function previousScan(paths: PacklightPaths, inv: Inventory): Inventory | undefi
   return undefined;
 }
 
-const newestBudget = (inv: Inventory) => {
-  const own = inv.projectScope !== 'global' ? inv.budget[inv.projectScope] : undefined;
-  return own ?? Object.values(inv.budget).sort((a, b) => (a.timestamp ?? '').localeCompare(b.timestamp ?? '')).at(-1);
-};
 
 function findings(inv: Inventory, items: ReportItem[]): Finding[] {
   const out: Finding[] = [];
@@ -153,6 +153,8 @@ export function buildReport(inv: Inventory, paths: PacklightPaths): ReportData {
     projects: inv.projects.filter(p => p.exists).map(p => ({ root: p.root, name: basename(p.root), sessions: p.sessions })),
     items,
     budget: inv.budget,
+    listingPriority: inv.listingPriority ?? [],
+    fix: fixPlan(inv, sug, new Set(Object.keys(keeps))),
     thresholds: { sessions: MIN_SESSIONS, days: MIN_DAYS },
     ...(prev ? { previous: { scanId: prev.scanId, createdAt: prev.createdAt, hookStartChars: hookStartChars(prev), dropped: prevBudget?.dropped.length ?? null, budgetTimestamp: prevBudget?.timestamp ?? null } } : {}),
     current: { hookStartChars: hookStartChars(inv) },
@@ -162,6 +164,6 @@ export function buildReport(inv: Inventory, paths: PacklightPaths): ReportData {
     })),
     ...(savedPicks ? { savedPicks } : {}),
     findings: findings(inv, items),
-    messages: { ...MESSAGES, applyCommand: APPLY_COMMAND, reportCommand: REPORT_COMMAND, pasteCommand: PASTE_COMMAND, invoke: INVOKE },
+    messages: { ...MESSAGES, applyCommand: APPLY_COMMAND, reportCommand: REPORT_COMMAND, pasteCommand: PASTE_COMMAND, fixCommand: FIX_COMMAND, invoke: INVOKE },
   };
 }
