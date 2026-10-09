@@ -30,16 +30,23 @@ Issues 1 to 3 are built (v0.1 scope). `packlight` scans your setup and opens a r
 
 Or skip the marking: `packlight fix` scans again, shows a plan that archives every unused item (none used since it was installed, over at least 20 sessions and 14 days, nothing you kept) with its projected gain, and asks once. It also lists the unused items only you can remove, such as claude.ai synced skills and the Claude app's own plugins.
 
-Needs Node 20 or later. It is not on npm yet; to try it:
+Needs Node 20 or later. Run it without installing:
 
 ```bash
-git clone https://github.com/cooperism-lab/packlight
-cd packlight
-npm install
-npm run build
-npm link        # puts `packlight` on your PATH
-packlight       # scan, write the report and open it
+npx packlight-cli                  # Claude Code: scan, write the report and open it
+npx packlight-cli --agent codex    # Codex
 ```
+
+Or install it once, then use the short command:
+
+```bash
+npm install -g packlight-cli
+packlight
+packlight fix
+packlight restore --all
+```
+
+`npx` always runs the newest version; a global install updates with `npm update -g packlight-cli`.
 
 The spec has been through strategy, design and engineering review.
 

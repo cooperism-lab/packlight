@@ -1,10 +1,10 @@
 // Lines the CLI and the report both show, word for word (design DR8): one source so they never drift.
 
 /**
- * How to call packlight again: "npx packlight" when this run came through npx, plain "packlight" when it is
+ * How to call packlight again: "npx packlight-cli" when this run came through npx, plain "packlight" when it is
  * installed (npm link or a global install). Until packlight is on npm, npx can only find a local install.
  */
-export const INVOKE = process.env.npm_command === 'exec' ? 'npx packlight' : 'packlight';
+export const INVOKE = process.env.npm_command === 'exec' ? 'npx packlight-cli' : 'packlight';
 
 export const APPLY_COMMAND = `${INVOKE} apply`;
 export const REPORT_COMMAND = `${INVOKE} report`;

@@ -126,13 +126,12 @@
     <section aria-labelledby="start">
       <h2 id="start">Try it on your&nbsp;setup</h2>
       <ol class="steps">
-        <li><div><p>Install it. Needs Node 20 or&nbsp;later.</p>
-<pre>git clone https://github.com/cooperism-lab/packlight
-cd packlight
-npm install &amp;&amp; npm run build &amp;&amp; npm link</pre></div></li>
-        <li><div><p>Scan and open your&nbsp;report.</p>
-<pre>packlight                 <span class="c"># Claude Code</span>
-packlight --agent codex   <span class="c"># Codex</span></pre></div></li>
+        <li><div><p>Run it, no install needed. Needs Node 20 or&nbsp;later.</p>
+<pre>npx packlight-cli                 <span class="c"># Claude Code</span>
+npx packlight-cli --agent codex   <span class="c"># Codex</span></pre></div></li>
+        <li><div><p>Or install it once and use the short&nbsp;command.</p>
+<pre>npm install -g packlight-cli
+packlight                 <span class="c"># scan and open your report</span></pre></div></li>
         <li><div><p>Archive what you don't use. It shows the plan and asks once. Everything can be put&nbsp;back.</p>
 <pre>packlight fix
 packlight restore --all   <span class="c"># undo</span></pre></div></li>
