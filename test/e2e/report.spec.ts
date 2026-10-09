@@ -37,6 +37,10 @@ test('leads with what each session starts with, and keeps skill detail in the Sk
   await open(page);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^Each session in proj starts with about [\d.]+k? tokens of setup$/);
   await expect(page.getByRole('img', { name: /Each session starts with about .* tokens \(.* characters\): .*tokens of MCP tool names/ })).toBeVisible();
+  // Nothing qualifies in this fixture, and the top still ends in one clear next step.
+  await expect(page.getByRole('region', { name: 'Fix' })).toContainText('Nothing unused to remove. Your biggest cost is');
+  await page.getByRole('button', { name: 'See the biggest cost' }).click();
+  await expect(page.getByRole('heading', { level: 2 }).first()).toBeVisible();
   // The legend jumps to the kind behind each part of the bar.
   await page.getByRole('button', { name: /MCP tool names/ }).click();
   await expect(page.getByRole('heading', { level: 2, name: /MCP servers/ })).toBeVisible();

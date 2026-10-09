@@ -335,13 +335,24 @@ export function clientMain(): void {
       h('h1', null, `${state.view === 'global' ? `Each ${AGENT} session` : `Each session in ${projectName(state.view)}`} starts with about ${tokens(total)} tokens of setup`),
       bar, legend,
       L?.measuredTokens ? h('p', { class: 'measured' }, `Measured by ${AGENT}: the median first request across ${plural(L.measuredSessions ?? 0, 'session')}, including your first message. The parts are estimated at about 4 characters per token.`) : null,
-      fixRow());
+      fixRow(parts.filter(p => !p.fixed)[0]));
   }
 
   // The one-click fix (report/fix.ts) as one line; everything else opens below it on demand.
-  function fixRow(): Child {
+  // Always one clear next step: fix, see what to remove by hand, or look at the biggest cost.
+  function fixRow(top?: { label: string; kind: Kind }): Child {
     const f = data.fix;
-    if (state.view !== data.scope || (!f.ids.length && !f.byHand?.items.length)) return null;
+    if (state.view !== data.scope) return null;
+    if (!f.ids.length && !f.byHand?.items.length) {
+      const target = top ?? { label: 'your skills', kind: 'skill' as Kind };
+      return h('section', { class: 'fix', 'aria-label': 'Fix' },
+        h('div', { class: 'fix-row' },
+          h('p', null, h('b', null, 'Nothing unused to remove.'), ` Your biggest cost is ${target.label}.`),
+          h('button', { class: 'btn primary', 'data-key': 'fix', onclick: () => {
+            state.kind = target.kind; state.sort = 'cost'; state.suggestedOnly = false; state.pushedOutOnly = false; render();
+            document.querySelector('.kindhead')?.scrollIntoView({ block: 'start' });
+          } }, 'See the biggest cost')));
+    }
     const hand = f.byHand;
     const total = setupTotal();
     const gains = (back: number, saved: number): string[] => [
@@ -357,8 +368,10 @@ export function clientMain(): void {
     for (const i of hand?.items ?? []) groups.set(i.where, [...(groups.get(i.where) ?? []), i]);
     return h('section', { class: 'fix', 'aria-label': 'Fix' },
       h('div', { class: 'fix-row' },
-        h('p', null, ...headline, h('span', { class: 'muted' }, ' (projected)')),
-        h('button', { class: f.ids.length ? 'btn primary' : 'btn', 'data-key': 'fix', 'aria-expanded': String(state.fixOpen), onclick: () => { state.fixOpen = !state.fixOpen; render(); } }, f.ids.length ? 'Fix it' : 'Show them')),
+        h('p', null, ...headline, (f.ids.length ? gains(f.descriptionsBack, f.sessionCharsSaved) : gains(hand!.descriptionsBack, hand!.sessionCharsSaved)).length
+          ? h('span', { class: 'muted' }, ' (projected)')
+          : h('span', { class: 'muted' }, ' · they load nothing in these sessions, so removing them only tidies up')),
+        h('button', { class: 'btn primary', 'data-key': 'fix', 'aria-expanded': String(state.fixOpen), onclick: () => { state.fixOpen = !state.fixOpen; render(); } }, f.ids.length ? 'Fix it' : state.fixOpen ? 'Hide the list' : 'Show me what to remove')),
       state.fixOpen ? h('div', { class: 'fix-run', role: 'region', 'aria-label': 'Run the fix' },
         f.ids.length ? [
           h('p', { class: 'muted' }, `${kinds}. None was used since it was installed, over at least ${data.thresholds.sessions} sessions and ${data.thresholds.days} days. Everything can be restored.`),
