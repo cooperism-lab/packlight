@@ -26,7 +26,7 @@ export function summarize(inv: Inventory, ms: number): string {
     if (s) {
       const t = [...s.firstRequestTokens].sort((a, b) => a - b);
       const median = t[Math.floor(t.length / 2)];
-      out.push(`Session start (${s.timestamp?.slice(0, 10) ?? 'latest'}, Codex ${s.version ?? '?'}): ${median !== undefined ? `about ${chars(median)} tokens in the first request (median of ${t.length} sessions, measured by Codex); ` : ''}skill listing ${chars(s.skillListingChars)} chars, AGENTS.md ${chars(s.agentsMdChars)}${s.pluginInstructionChars ? `, plugin instructions ${chars(s.pluginInstructionChars)}` : ''}${s.appInstructionChars ? `, app instructions ${chars(s.appInstructionChars)}` : ''}.`);
+      out.push(`Session start (${s.timestamp?.slice(0, 10) ?? 'latest'}, Codex ${s.version ?? '?'}): ${median !== undefined ? `about ${chars(median)} tokens in the first request (median of ${t.length} sessions, measured by Codex); ` : ''}${s.listedSkills && !s.listedSkills.length ? 'no skills listed (these sessions started with skills off)' : `skill listing ${chars(s.skillListingChars)} chars`}, AGENTS.md ${chars(s.agentsMdChars)}${s.pluginInstructionChars ? `, plugin instructions ${chars(s.pluginInstructionChars)}` : ''}${s.appInstructionChars ? `, app instructions ${chars(s.appInstructionChars)}` : ''}.`);
     } else out.push('Session start: no Codex session recorded what it started with.');
     if (inv.coverage.uncertain) out.push(`\nUsage may be incomplete: ${inv.coverage.reasons.join('; ')}.`);
     return out.join('\n');

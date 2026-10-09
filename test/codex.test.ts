@@ -87,6 +87,15 @@ describe('Codex inventory on the fixture home', () => {
     expect(find('skill', 'old-helper').usage.total).toBe(0);
   });
 
+  it('charges no skill when sessions started with an empty listing', async () => {
+    const { readdirSync, readFileSync, writeFileSync: write } = await import('node:fs');
+    const walk = (d: string): string[] => readdirSync(d, { withFileTypes: true }).flatMap(e => (e.isDirectory() ? walk(join(d, e.name)) : [join(d, e.name)]));
+    for (const f of walk(join(home, '.codex', 'sessions'))) write(f, readFileSync(f, 'utf8').replace(/"host_skills":\{"body":"[^"]*"\}/, '"host_skills":{"body":""}'));
+    const empty = await scanCodex({ home, cwd: project, now: NOW });
+    expect(empty.codexStart!.listedSkills).toEqual([]);
+    expect(empty.items.filter(i => i.kind === 'skill').every(i => i.standingChars === 0)).toBe(true);
+  });
+
   it('charges only listed skills, and takes the median measured first request', () => {
     expect(find('skill', 'slides:slides').standingChars).toBe(0);
     expect(find('skill', 'old-helper').standingChars).toBeGreaterThan(0);

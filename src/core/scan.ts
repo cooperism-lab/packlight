@@ -291,8 +291,9 @@ export async function scanCodex(opts: ScanOptions): Promise<Inventory> {
   const codexStart = newestStart ? { ...newestStart, firstRequestTokens: (scoped.length ? scoped : logs.starts).flatMap(s => s.firstRequestTokens) } : undefined;
 
   // Only skills in the logged listing load; the rest sit on disk (a plugin the app has not switched on, say).
+  // An empty listing counts too: Codex runs started with skills off (codex exec from another agent, say) load none.
   const listed = codexStart?.listedSkills;
-  if (listed?.length) {
+  if (listed) {
     const names = new Set(listed);
     for (const it of items) if ((it.kind === 'skill') && !names.has(it.name)) it.standingChars = 0;
     for (const p of items.filter(i => i.kind === 'plugin')) p.standingChars = 0;
