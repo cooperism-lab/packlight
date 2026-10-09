@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>packlight: see the tokens Claude Code and Codex load before you type</title>
+<meta name="description" content="packlight is a free, open-source tool that measures how many tokens every Claude Code and Codex session starts with: MCP tool lists, skills, hooks, CLAUDE.md and AGENTS.md. It finds what you never use and archives it, with undo.">
+<link rel="canonical" href="https://cooperism-lab.github.io/packlight/">
+<link rel="icon" href="img/icon.svg" type="image/svg+xml">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="packlight">
+<meta property="og:title" content="packlight: see what every Claude Code and Codex session carries">
+<meta property="og:description" content="Count the tokens your skills, MCP servers and hooks load before you type. Archive what you never use. Undo anytime. Open source, runs offline.">
+<meta property="og:url" content="https://cooperism-lab.github.io/packlight/">
+<meta property="og:image" content="https://cooperism-lab.github.io/packlight/img/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"SoftwareApplication","name":"packlight","applicationCategory":"DeveloperApplication","operatingSystem":"macOS, Linux, Windows","description":"Measures how many tokens every Claude Code and Codex session starts with, finds unused skills, MCP servers and hooks, and archives them with undo.","url":"https://cooperism-lab.github.io/packlight/","codeRepository":"https://github.com/cooperism-lab/packlight","license":"https://opensource.org/licenses/MIT","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"author":{"@type":"Person","name":"Cooper Kao"}}
+</script>
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[
+{"@type":"Question","name":"Why does my Claude Code context fill up before I type anything?","acceptedAnswer":{"@type":"Answer","text":"Every session starts with your whole setup: the name of every MCP tool, a listing of every skill, hook output, agent descriptions and CLAUDE.md files. packlight measures each part from your local session logs."}},
+{"@type":"Question","name":"How many tokens do MCP servers use in Claude Code?","acceptedAnswer":{"@type":"Answer","text":"Claude Code names every MCP tool at the start of each session, and some servers add instructions. A server with 200 tools can cost over 3,000 tokens per session even if you never call it. packlight shows the cost of each server."}},
+{"@type":"Question","name":"Does packlight work with Codex?","acceptedAnswer":{"@type":"Answer","text":"Yes. For Codex, packlight reads the input tokens Codex logs for each session's first request, so the number is measured rather than estimated."}},
+{"@type":"Question","name":"Is it safe? Can I undo it?","acceptedAnswer":{"@type":"Answer","text":"packlight asks before changing anything, moves items into an archive instead of deleting them, and restores them byte for byte with one command. It runs offline and sends nothing anywhere."}}
+]}
+</script>
+<style>
+  :root { --ink: #18181b; --ink-2: #4b4f45; --ink-3: #6b6f66; --green: #2f7a55; --line: rgba(24,24,27,.1); --card: rgba(255,255,255,.66); color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { margin: 0; color: var(--ink); font: 17px/1.55 -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif; -webkit-font-smoothing: antialiased;
+    background: radial-gradient(1100px 700px at 0% 100%, rgba(83,140,96,.35), transparent 70%), radial-gradient(900px 600px at 90% 0%, rgba(255,236,196,.9), transparent 70%), linear-gradient(180deg, #f4efe0 0%, #eef0e2 50%, #dfe8d6 100%) fixed; }
+  a { color: inherit; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+  header { display: flex; align-items: center; justify-content: space-between; padding: 22px 0; }
+  .brand { display: inline-flex; align-items: center; gap: 10px; font-weight: 700; font-size: 20px; letter-spacing: -0.02em; text-decoration: none; }
+  .brand img { width: 32px; height: 32px; }
+  header nav { display: flex; gap: 20px; font-size: 15px; }
+  header nav a { text-decoration: none; color: var(--ink-2); }
+  header nav a:hover { color: var(--ink); }
+  .hero { padding: 48px 0 40px; max-width: 860px; }
+  h1 { font-size: clamp(38px, 6vw, 68px); line-height: 1.03; letter-spacing: -0.045em; margin: 0; font-weight: 750; }
+  h1 em { font-style: normal; color: var(--green); }
+  .lede { font-size: clamp(18px, 2.1vw, 22px); color: var(--ink-2); margin: 22px 0 0; max-width: 700px; }
+  .ctas { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 30px; }
+  .btn { display: inline-flex; align-items: center; gap: 10px; height: 52px; padding: 0 22px; border-radius: 999px; font-weight: 600; text-decoration: none; font-size: 17px; }
+  .btn.primary { background: var(--ink); color: #fafaf7; }
+  .btn.primary:hover { background: #2a2a2e; }
+  .btn.ghost { background: var(--card); border: 1px solid var(--line); }
+  .btn svg { width: 22px; height: 22px; fill: currentColor; }
+  .note { margin-top: 14px; font-size: 14px; color: var(--ink-3); }
+  .window { margin: 18px 0 0; border-radius: 22px; overflow: hidden; background: #121317; box-shadow: 0 40px 90px rgba(28,44,30,.3), 0 8px 24px rgba(28,44,30,.15); }
+  .window .bar { height: 42px; display: flex; align-items: center; gap: 8px; padding: 0 16px; background: #1a1c21; border-bottom: 1px solid #262a31; }
+  .window .bar i { width: 12px; height: 12px; border-radius: 50%; display: block; }
+  .window .bar span { margin-left: 14px; color: #8b919c; font: 13px ui-monospace, "SF Mono", monospace; }
+  .window img { display: block; width: 100%; height: auto; }
+  .caption { font-size: 14px; color: var(--ink-3); margin: 12px 0 0; }
+  section { padding: 64px 0 0; }
+  h2 { font-size: clamp(28px, 3.6vw, 40px); letter-spacing: -0.03em; line-height: 1.1; margin: 0 0 22px; }
+  .rows { display: grid; gap: 0; border-top: 1px solid var(--line); }
+  .row { display: grid; grid-template-columns: 220px 1fr; gap: 8px 32px; padding: 20px 0; border-bottom: 1px solid var(--line); }
+  .row b { font-size: 18px; }
+  .row p { margin: 0; color: var(--ink-2); }
+  ol.steps { list-style: none; padding: 0; margin: 0; display: grid; gap: 14px; counter-reset: s; }
+  ol.steps li { counter-increment: s; display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 14px; align-items: start; }
+  ol.steps li::before { content: counter(s); width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--ink); color: #fafaf7; font-weight: 700; font-size: 15px; }
+  ol.steps p { margin: 4px 0 8px; color: var(--ink-2); }
+  pre { margin: 0; background: #18181b; color: #e9eadf; padding: 16px 18px; border-radius: 12px; font: 14.5px/1.6 ui-monospace, "SF Mono", Menlo, monospace; overflow-x: auto; }
+  pre .c { color: #8fa38a; }
+  details { border-bottom: 1px solid var(--line); padding: 16px 0; }
+  details:first-of-type { border-top: 1px solid var(--line); }
+  summary { cursor: pointer; font-weight: 600; font-size: 18px; }
+  details p { color: var(--ink-2); margin: 10px 0 0; max-width: 760px; }
+  footer { padding: 64px 0 48px; color: var(--ink-3); font-size: 14px; display: flex; flex-wrap: wrap; gap: 8px 20px; }
+  @media (max-width: 720px) { .row { grid-template-columns: 1fr; } header nav a.hide-sm { display: none; } .hero { padding-top: 24px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="brand" href="./"><img src="img/mark.svg" alt="" width="32" height="32">packlight</a>
+    <nav aria-label="Site">
+      <a href="sample/">Sample report</a>
+      <a class="hide-sm" href="#faq">FAQ</a>
+      <a href="https://github.com/cooperism-lab/packlight">GitHub</a>
+    </nav>
+  </header>
+
+  <main>
+    <div class="hero">
+      <h1>See the tokens Claude Code and Codex load <em>before you type.</em></h1>
+      <p class="lede">Every session starts with your whole setup: every MCP tool name, every skill, every hook's text, CLAUDE.md and AGENTS.md. packlight measures it from your own session logs, shows what you never use, and archives it in one step. Undo anytime.</p>
+      <div class="ctas">
+        <a class="btn primary" href="sample/">See a sample report</a>
+        <a class="btn ghost" href="https://github.com/cooperism-lab/packlight"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>Open source on GitHub</a>
+      </div>
+      <p class="note">Free and MIT licensed. Runs on your computer and sends nothing anywhere. macOS, Linux and Windows.</p>
+    </div>
+
+    <figure style="margin:0">
+      <div class="window">
+        <div class="bar"><i style="background:#ff5f57"></i><i style="background:#febc2e"></i><i style="background:#28c840"></i><span>~/.packlight/report-claude-code.html</span></div>
+        <a href="sample/"><img src="img/report.jpg" width="1100" height="760" alt="packlight report for a sample Claude Code project: each session starts with about 13.6k tokens of setup, split into skill listing, MCP tool names, MCP instructions, hook text and agent descriptions, with an option to archive 61 unused items and save about 5.1k tokens per session."></a>
+      </div>
+      <figcaption class="caption">A sample report for an invented setup. <a href="sample/">Open it and click around.</a></figcaption>
+    </figure>
+
+    <section aria-labelledby="what">
+      <h2 id="what">What packlight shows you</h2>
+      <div class="rows">
+        <div class="row"><b>Tokens per session</b><p>How much of the context window your setup takes before you type, split by source. For Codex the number is measured: Codex logs each session's input tokens.</p></div>
+        <div class="row"><b>MCP servers</b><p>Each server's tool names and instructions, which load every session whether you call them or not, and how often you actually do.</p></div>
+        <div class="row"><b>Skills and plugins</b><p>Which skills you used, which you never did, and which Claude Code dropped from its skill listing because it ran out of room.</p></div>
+        <div class="row"><b>Hooks</b><p>The text each hook adds to your sessions and how long it takes to run.</p></div>
+        <div class="row"><b>One-click fix</b><p>Archives everything unused since it was installed, after one question. Items only you can remove (claude.ai connectors, app plugins, Codex config) come with the exact place to do it.</p></div>
+      </div>
+    </section>
+
+    <section aria-labelledby="start">
+      <h2 id="start">Try it on your setup</h2>
+      <ol class="steps">
+        <li><div><p>Install it. Needs Node 20 or later.</p>
+<pre>git clone https://github.com/cooperism-lab/packlight
+cd packlight
+npm install &amp;&amp; npm run build &amp;&amp; npm link</pre></div></li>
+        <li><div><p>Scan and open your report.</p>
+<pre>packlight                 <span class="c"># Claude Code</span>
+packlight --agent codex   <span class="c"># Codex</span></pre></div></li>
+        <li><div><p>Archive what you don't use. It shows the plan and asks once. Everything can be put back.</p>
+<pre>packlight fix
+packlight restore --all   <span class="c"># undo</span></pre></div></li>
+      </ol>
+    </section>
+
+    <section id="faq" aria-labelledby="faqh">
+      <h2 id="faqh">Questions</h2>
+      <details><summary>Why does my Claude Code context fill up before I type anything?</summary><p>Every session starts with your whole setup: the name of every MCP tool, a listing of every skill, the text your hooks add, agent descriptions and CLAUDE.md files. packlight measures each part from your local session logs, so you can see which part is biggest.</p></details>
+      <details><summary>How many tokens do MCP servers use?</summary><p>Claude Code names every MCP tool at the start of each session, and some servers add instructions. A server with 200 tools can cost over 3,000 tokens per session even if you never call it. packlight shows each server's cost and how often you used it.</p></details>
+      <details><summary>Does it work with Codex?</summary><p>Yes. For Codex, packlight reads the input tokens Codex logs for each session's first request, so the headline is measured rather than estimated. Codex plugins and MCP servers are switched off in ~/.codex/config.toml; packlight shows you the exact line.</p></details>
+      <details><summary>Is it safe? Can I undo it?</summary><p>packlight asks before changing anything, moves items into an archive instead of deleting them, and restores them byte for byte with one command. It never edits CLAUDE.md or AGENTS.md, and it runs offline.</p></details>
+      <details><summary>How is this different from /context?</summary><p>Claude Code's /context shows what one session holds right now. packlight looks across all your sessions to find what you never use, then removes it safely and can put it back.</p></details>
+    </section>
+  </main>
+
+  <footer>
+    <span>packlight, built by Cooper Kao</span>
+    <a href="https://github.com/cooperism-lab/packlight">github.com/cooperism-lab/packlight</a>
+    <span>MIT licence</span>
+  </footer>
+</div>
+</body>
+</html>

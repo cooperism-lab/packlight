@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, sep } from 'node:path';
 import { execFileSync, spawn } from 'node:child_process';
@@ -89,7 +89,7 @@ function scopeFor(paths: ReturnType<typeof packlightPaths>, agent: Agent): strin
 }
 
 /** One report file per agent, so a Codex scan never replaces the Claude Code report (or the other way round). */
-const reportFile = (agent: Agent): string => (agent === 'codex' ? 'report-codex.html' : 'report.html');
+const reportFile = (agent: Agent): string => (agent === 'codex' ? 'report-codex.html' : 'report-claude-code.html');
 
 /** Writes the agent's report beside packlight's data and returns its path. */
 function writeReport(home: string, packlightRoot: string, inv: Inventory): string {
@@ -97,6 +97,12 @@ function writeReport(home: string, packlightRoot: string, inv: Inventory): strin
   const file = join(packlightRoot, reportFile(inv.agent));
   mkdirSync(packlightRoot, { recursive: true });
   writeFileSync(file, renderReport(buildReport(inv, paths)));
+  // Before 0.1, Claude Code's report was report.html: remove that copy so an old report is never opened by mistake.
+  // Only packlight's own file goes (it carries packlight's data block); anything else at that name is left alone.
+  const legacy = join(packlightRoot, 'report.html');
+  if (inv.agent === 'claude-code' && existsSync(legacy)) {
+    try { if (readFileSync(legacy, 'utf8').includes('id="packlight-data"')) unlinkSync(legacy); } catch { /* leave it */ }
+  }
   return file;
 }
 
