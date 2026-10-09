@@ -31,24 +31,25 @@ export function claudePaths(home: string): ClaudePaths {
 const readJson = (p: string): any => {
   try { return JSON.parse(readFileSync(p, 'utf8').replace(/^﻿/, '')); } catch { return undefined; }
 };
-const readText = (p: string): string => { try { return readFileSync(p, 'utf8'); } catch { return ''; } };
-const dirs = (p: string): string[] => {
+export const readText = (p: string): string => { try { return readFileSync(p, 'utf8'); } catch { return ''; } };
+export const dirs = (p: string): string[] => {
   try { return readdirSync(p, { withFileTypes: true }).filter(d => d.isDirectory() || d.isSymbolicLink()).map(d => d.name).sort(); } catch { return []; }
 };
-const files = (p: string, ext: string): string[] => {
+export const files = (p: string, ext: string): string[] => {
   try { return readdirSync(p, { withFileTypes: true }).filter(d => !d.isDirectory() && d.name.endsWith(ext)).map(d => d.name).sort(); } catch { return []; }
 };
 /** Pointer segment escaping per RFC 6901. */
 const ptr = (...parts: (string | number)[]): string => '/' + parts.map(p => String(p).replace(/~/g, '~0').replace(/\//g, '~1')).join('/');
 
-function firstSeenOf(path: string): { firstSeen: string | null; firstSeenSource: Item['firstSeenSource'] } {
+export function firstSeenOf(path: string): { firstSeen: string | null; firstSeenSource: Item['firstSeenSource'] } {
   const st = lstatSync(path, { throwIfNoEntry: false });
   if (!st) return { firstSeen: null, firstSeenSource: null };
   if (st.birthtimeMs > 0) return { firstSeen: new Date(st.birthtimeMs).toISOString(), firstSeenSource: 'birthtime' };
   return { firstSeen: new Date(st.mtimeMs).toISOString(), firstSeenSource: 'mtime' };
 }
 
-interface ItemInput {
+export interface ItemInput {
+  agent?: Item['agent'];
   kind: Kind;
   name: string;
   source: string;
@@ -69,11 +70,12 @@ interface ItemInput {
   pointer?: string;
 }
 
-function makeItem(i: ItemInput): Item {
+export function makeItem(i: ItemInput): Item {
   const description = i.description ?? '';
+  const agent = i.agent ?? AGENT;
   return {
-    id: itemId({ agent: AGENT, kind: i.kind, source: i.source, name: i.name, path: i.path, pointer: i.pointer }),
-    agent: AGENT,
+    id: itemId({ agent, kind: i.kind, source: i.source, name: i.name, path: i.path, pointer: i.pointer }),
+    agent,
     kind: i.kind,
     name: i.name,
     source: i.source,

@@ -197,3 +197,22 @@ test('offers the one-click fix as one line, with the command and by-hand list be
   await page.getByRole('button', { name: 'Review them one by one instead' }).click();
   await expect(page.getByRole('tab', { name: 'Picks (2)' })).toHaveAttribute('aria-selected', 'true');
 });
+
+test('reports a Codex setup with its measured first request', async ({ page }) => {
+  const { buildCodexHome } = await import('../fixtures/codex-home.js');
+  const { scanCodex } = await import('../../dist/core/scan.js');
+  const { buildReport } = await import('../../dist/report/model.js');
+  const { renderReport } = await import('../../dist/report/render.js');
+  const { packlightPaths } = await import('../../dist/archive/paths.js');
+  const now = new Date('2026-10-01T12:00:00Z');
+  const { home, project } = buildCodexHome(join(fx.dir, 'codex'), now.getTime());
+  const file = join(fx.dir, 'codex-report.html');
+  writeFileSync(file, renderReport(buildReport(await scanCodex({ home, cwd: project, now }), packlightPaths(home))));
+  await page.goto(pathToFileURL(file).href);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Each session in app starts with about 21.1k tokens of setup');
+  await expect(page.getByText(/Measured by Codex: the median first request across 22 sessions/)).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Fix' })).toContainText('Archive 2 unused items');
+  await page.getByRole('navigation', { name: 'Kinds' }).getByRole('button', { name: /Plugins/ }).click();
+  await expect(page.getByText(/enabled = false in ~\/\.codex\/config\.toml/)).toBeVisible();
+  expect((await new AxeBuilder({ page }).analyze()).violations.map(v => v.id)).toEqual([]);
+});

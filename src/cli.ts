@@ -7,10 +7,11 @@ import { createInterface } from 'node:readline/promises';
 import { apply, claudeCodeRunning, findPicksFile, readKeeps, STALE_PICKS } from './archive/apply.js';
 import { downloadsDir, newestScan, packlightPaths, readScan } from './archive/paths.js';
 import { archiveList, restore } from './archive/restore.js';
-import { scan } from './core/scan.js';
+import { scan, scanCodex } from './core/scan.js';
+import { codexPaths } from './adapters/codex/inventory.js';
 import { INVOKE, MESSAGES, PASTE_COMMAND } from './core/messages.js';
 import { summarize } from './core/summary.js';
-import type { Inventory } from './core/types.js';
+import type { Agent, Inventory } from './core/types.js';
 import { buildReport, CHARS_PER_TOKEN, loadTotal, sessionLoad } from './report/model.js';
 import { fixPlan, type FixPlan } from './report/fix.js';
 import { renderReport } from './report/render.js';
@@ -27,6 +28,7 @@ Usage:
   packlight restore <id…> | --all [--home <dir>] [--out <dir>]
   packlight archive list [--home <dir>] [--out <dir>]
 
+  --agent  claude-code or codex (default: Claude Code when ~/.claude exists, else Codex)
   --home   home folder to work on (default: your home folder)
   --out    packlight's own folder (default: <home>/.packlight)
   --since  only count sessions from this date
@@ -41,7 +43,7 @@ function arg(argv: string[], name: string): string | undefined {
 
 /** Positional arguments after the command, skipping flags and their values. */
 function positional(argv: string[]): string[] {
-  const withValue = new Set(['--home', '--out', '--since']);
+  const withValue = new Set(['--home', '--out', '--since', '--agent']);
   const out: string[] = [];
   for (let i = 1; i < argv.length; i++) {
     const a = argv[i]!;
@@ -62,10 +64,25 @@ async function confirm(question: string): Promise<boolean> {
 }
 
 /** The newest scan's scope: the current folder's project if it has a scan, else the newest scan of any scope. */
-function scopeFor(paths: ReturnType<typeof packlightPaths>): string {
+const AGENT_NAME: Record<Agent, string> = { 'claude-code': 'Claude Code', codex: 'Codex' };
+const setupDir = (agent: Agent, home: string): string => (agent === 'codex' ? codexPaths(home).root : join(home, '.claude'));
+
+/** --agent, else Claude Code when its folder exists, else Codex when its folder exists. */
+function pickAgent(argv: string[], home: string): Agent | null {
+  const a = arg(argv, '--agent');
+  if (a) return a === 'codex' || a === 'claude-code' ? a : null;
+  return existsSync(join(home, '.claude')) || !existsSync(codexPaths(home).root) ? 'claude-code' : 'codex';
+}
+
+function noSetup(agent: Agent, home: string): number {
+  console.error(`No ${AGENT_NAME[agent]} setup found: ${setupDir(agent, home)} does not exist. Pass --home to scan another folder${agent === 'codex' ? '' : ', or --agent codex for Codex'}.`);
+  return 1;
+}
+
+function scopeFor(paths: ReturnType<typeof packlightPaths>, agent: Agent): string {
   try {
     const ids = readdirSync(paths.scans).sort().reverse();
-    const scans = ids.map(i => readScan(paths, i)).filter((x): x is Inventory => !!x);
+    const scans = ids.map(i => readScan(paths, i)).filter((x): x is Inventory => !!x && x.agent === agent);
     const here = scans.find(s => s.projectScope !== 'global' && (process.cwd() === s.projectScope || process.cwd().startsWith(s.projectScope + sep)));
     return (here ?? scans[0])?.projectScope ?? 'global';
   } catch { return 'global'; }
@@ -90,9 +107,9 @@ function openFile(file: string): void {
   try { spawn(cmd as string, args as string[], { detached: true, stdio: 'ignore' }).on('error', () => {}).unref(); } catch { /* the path is printed anyway */ }
 }
 
-async function scanAndSave(home: string, packlightRoot: string, since?: string): Promise<{ inventory: Inventory; ms: number; file: string }> {
+async function scanAndSave(home: string, packlightRoot: string, since: string | undefined, agent: Agent): Promise<{ inventory: Inventory; ms: number; file: string }> {
   const started = Date.now();
-  const inventory = await scan({ home, cwd: process.cwd(), since });
+  const inventory = await (agent === 'codex' ? scanCodex : scan)({ home, cwd: process.cwd(), since });
   const dir = join(packlightRoot, 'scans', inventory.scanId);
   mkdirSync(dir, { recursive: true });
   const file = join(dir, 'inventory.json');
@@ -140,13 +157,12 @@ async function main(argv: string[]): Promise<number> {
   const home = arg(argv, '--home') ?? homedir();
   const packlightRoot = arg(argv, '--out') ?? join(home, '.packlight');
   const out = (line: string): void => console.log(line);
+  const agent = pickAgent(argv, home);
+  if (!agent) { console.error('--agent takes claude-code or codex.'); return 2; }
 
   if (!command || command.startsWith('--')) {
-    if (!existsSync(join(home, '.claude'))) {
-      console.error(`No Claude Code setup found: ${join(home, '.claude')} does not exist. Pass --home to scan another folder.`);
-      return 1;
-    }
-    const { inventory, ms } = await scanAndSave(home, packlightRoot, arg(argv, '--since'));
+    if (!existsSync(setupDir(agent, home))) return noSetup(agent, home);
+    const { inventory, ms } = await scanAndSave(home, packlightRoot, arg(argv, '--since'), agent);
     console.log(summarize(inventory, ms));
     const report = writeReport(home, packlightRoot, inventory);
     console.log(`\nReport: ${report}\n${MESSAGES.afterScan}`);
@@ -157,7 +173,7 @@ async function main(argv: string[]): Promise<number> {
   if (command === 'report') {
     const id = arg(argv, '--scan');
     const paths = packlightPaths(home, packlightRoot);
-    const inv = id ? readScan(paths, id) : newestScan(paths, 'claude-code', scopeFor(paths));
+    const inv = id ? readScan(paths, id) : newestScan(paths, agent, scopeFor(paths, agent));
     if (!inv) { console.error(id ? `No scan ${id} in ${paths.scans}.` : `No scan yet. Run \`${INVOKE}\` first.`); return 1; }
     const report = writeReport(home, packlightRoot, inv);
     console.log(`Report: ${report}`);
@@ -168,12 +184,9 @@ async function main(argv: string[]): Promise<number> {
   if (command === 'scan') {
     const since = arg(argv, '--since');
     if (since && !/^\d{4}-\d{2}-\d{2}/.test(since)) { console.error('--since takes a date like 2026-08-01.'); return 2; }
-    if (!existsSync(join(home, '.claude'))) {
-      console.error(`No Claude Code setup found: ${join(home, '.claude')} does not exist. Pass --home to scan another folder.`);
-      return 1;
-    }
-    if (argv.includes('--json')) { process.stdout.write(JSON.stringify(await scan({ home, cwd: process.cwd(), since }), null, 1) + '\n'); return 0; }
-    const { inventory, ms, file } = await scanAndSave(home, packlightRoot, since);
+    if (!existsSync(setupDir(agent, home))) return noSetup(agent, home);
+    if (argv.includes('--json')) { process.stdout.write(JSON.stringify(await (agent === 'codex' ? scanCodex : scan)({ home, cwd: process.cwd(), since }), null, 1) + '\n'); return 0; }
+    const { inventory, ms, file } = await scanAndSave(home, packlightRoot, since, agent);
     console.log(summarize(inventory, ms));
     console.log(`\nInventory written to ${file}`);
     return 0;
@@ -211,14 +224,11 @@ async function main(argv: string[]): Promise<number> {
   }
 
   if (command === 'fix') {
-    if (!existsSync(join(home, '.claude'))) {
-      console.error(`No Claude Code setup found: ${join(home, '.claude')} does not exist. Pass --home to scan another folder.`);
-      return 1;
-    }
+    if (!existsSync(setupDir(agent, home))) return noSetup(agent, home);
     const yes = argv.includes('--yes');
     if (!yes && !process.stdin.isTTY) { console.error('fix asks before it changes anything. Run it in a terminal, or pass --yes.'); return 2; }
     // Always from a fresh scan: the plan never acts on an old picture of your setup.
-    const { inventory } = await scanAndSave(home, packlightRoot, arg(argv, '--since'));
+    const { inventory } = await scanAndSave(home, packlightRoot, arg(argv, '--since'), agent);
     const paths = packlightPaths(home, packlightRoot);
     const kept = new Set(Object.keys(readKeeps(paths).keeps));
     const plan = fixPlan(inventory, suggestions(inventory, kept), kept);
@@ -236,7 +246,7 @@ async function main(argv: string[]): Promise<number> {
       const r = await apply({ home, packlightRoot, picksFile, yes, confirm, claudeRunning: claudeCodeRunning, out, crash, singleQuestion: `Archive these ${plan.ids.length} items?` });
       if (r.archived.length) {
         out(`\nDone. Undo everything with \`${INVOKE} restore --all\`, or one item with the restore command above.`);
-        out(`Claude Code reads its setup when a session starts: start a new session, then run \`${INVOKE}\` to measure the result.`);
+        out(`${AGENT_NAME[agent]} reads its setup when a session starts: start a new session, then run \`${INVOKE}${agent === 'codex' ? ' --agent codex' : ''}\` to measure the result.`);
       }
       printByHand(plan, out, setup);
       return r.exitCode;

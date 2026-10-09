@@ -1,5 +1,5 @@
 import { lstatSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { basename, join } from 'node:path';
+import { basename, join, sep } from 'node:path';
 import { readKeeps, findPicksFile, parsePicks } from '../archive/apply.js';
 import { listManifests } from '../archive/journal.js';
 import { downloadsDir, readScan, type PacklightPaths } from '../archive/paths.js';
@@ -57,13 +57,24 @@ export function hookStartChars(inv: Inventory): number {
     .reduce((n, i) => n + i.usage.hook!.injectedChars / i.usage.hook!.firings, 0));
 }
 
-export interface SessionLoad { skillListing: number; mcpTools: number; mcpToolCount: number; mcpInstructions: number; hookStart: number; agents: number; observedAt: string | null }
+export interface SessionLoad { skillListing: number; mcpTools: number; mcpToolCount: number; mcpInstructions: number; hookStart: number; agents: number; observedAt: string | null; agentsMd?: number; pluginInstructions?: number; measuredTokens?: number; measuredSessions?: number }
 
 /** Rough tokens for a number of characters: about 4 per token for English text (labelled "about" wherever shown). */
 export const CHARS_PER_TOKEN = 4;
-export const loadTotal = (l: SessionLoad): number => l.skillListing + l.mcpTools + l.mcpInstructions + l.hookStart + l.agents;
+/** Characters of setup a session starts with; for Codex the measured first request, converted back to characters. */
+export const loadTotal = (l: SessionLoad): number => (l.measuredTokens ? l.measuredTokens * CHARS_PER_TOKEN : l.skillListing + l.mcpTools + l.mcpInstructions + l.hookStart + l.agents + (l.agentsMd ?? 0) + (l.pluginInstructions ?? 0));
 
 export function sessionLoad(inv: Inventory): SessionLoad | null {
+  if (inv.agent === 'codex') {
+    const s = inv.codexStart;
+    if (!s) return null;
+    const t = [...s.firstRequestTokens].sort((a, b) => a - b);
+    return {
+      skillListing: s.skillListingChars, mcpTools: 0, mcpToolCount: 0, mcpInstructions: 0, hookStart: 0, agents: 0, observedAt: s.timestamp,
+      agentsMd: s.agentsMdChars, pluginInstructions: s.pluginInstructionChars + s.appInstructionChars,
+      ...(t.length ? { measuredTokens: t[Math.floor(t.length / 2)]!, measuredSessions: t.length } : {}),
+    };
+  }
   const tl = inv.toolListing?.[inv.projectScope] ?? Object.values(inv.toolListing ?? {}).sort((a, b) => (a.timestamp ?? '').localeCompare(b.timestamp ?? '')).at(-1);
   const b = newestBudget(inv);
   if (!tl && !b) return null;
@@ -139,7 +150,9 @@ function findings(inv: Inventory, items: ReportItem[]): Finding[] {
 export function buildReport(inv: Inventory, paths: PacklightPaths): ReportData {
   const keeps = readKeeps(paths).keeps;
   const sug = suggestions(inv, new Set(Object.keys(keeps)));
-  const manifests = listManifests(paths);
+  // Only this agent's archives: a manifest belongs to Codex when the item came from a .codex folder.
+  const fromCodex = (where: string): boolean => where.includes(`${sep}.codex${sep}`);
+  const manifests = listManifests(paths).filter(m => fromCodex(m.originalPath ?? m.settingsFile ?? '') === (inv.agent === 'codex'));
   const openArchives = new Map(manifests.filter(m => m.status === 'archived').map(m => [m.itemId, m]));
 
   const items: ReportItem[] = inv.items.map(({ declarations, descHash, targetFingerprint, ...rest }) => {

@@ -10,7 +10,16 @@ export function clientMain(): void {
   type Kind = ReportItem['kind'];
   const data = JSON.parse(document.getElementById('packlight-data')!.textContent!) as ReportData;
   const KINDS: [Kind, string][] = [['skill', 'Skills'], ['command', 'Commands'], ['agent', 'Agents'], ['hook', 'Hooks'], ['plugin', 'Plugins'], ['mcp', 'MCP servers'], ['instructions', 'Instructions']];
-  const KIND_TEXT: Record<Kind, string> = {
+  const AGENT = data.agent === 'codex' ? 'Codex' : 'Claude Code';
+  const KIND_TEXT: Record<Kind, string> = data.agent === 'codex' ? {
+    skill: 'Each skill\'s name, description and path sit in a listing Codex sees every session. Codex opens a skill\'s SKILL.md when it uses it.',
+    command: 'Custom prompts you type as slash commands.',
+    agent: 'Subagents Codex can hand work to.',
+    hook: 'Programs Codex runs on events.',
+    plugin: 'Bundles of skills and tools. Switch one off in Codex\'s plugin settings, or with enabled = false in ~/.codex/config.toml.',
+    mcp: 'Tool servers Codex can call. Switch one off with enabled = false under its [mcp_servers] table in ~/.codex/config.toml.',
+    instructions: 'AGENTS.md files, loaded in full in their project. packlight never changes these.',
+  } : {
     skill: 'Each skill\'s name and description sit in a listing Claude sees every session. When the listing runs out of room, descriptions are dropped.',
     command: 'Slash commands you type. Their descriptions share the skill listing.',
     agent: 'Subagents Claude can hand work to. Their descriptions load every session.',
@@ -56,7 +65,7 @@ export function clientMain(): void {
   const date = (s: string | null | undefined): string => (s ? new Date(s).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: new Date(s).getFullYear() === new Date().getFullYear() ? undefined : 'numeric' }) : '—');
   // Tokens are estimated from characters (logs record characters): about 4 per token, the same as CHARS_PER_TOKEN in model.ts.
   const tokens = (c: number): string => chars(c / 4);
-  const setupTotal = (): number => { const l = data.sessionLoad; return l ? l.skillListing + l.mcpTools + l.mcpInstructions + l.hookStart + l.agents : 0; };
+  const setupTotal = (): number => { const l = data.sessionLoad; return !l ? 0 : l.measuredTokens ? l.measuredTokens * 4 : l.skillListing + l.mcpTools + l.mcpInstructions + l.hookStart + l.agents + (l.agentsMd ?? 0) + (l.pluginInstructions ?? 0); };
   const share = (part: number, whole: number): string => { const p = (part / whole) * 100; return p > 0 && p < 1 ? 'under 1%' : `${Math.round(p)}%`; };
   const plural = (n: number, one: string, many = `${one}s`): string => `${n} ${n === 1 ? one : many}`;
   const tildify = (p: string): string => (p.startsWith(data.home) ? `~${p.slice(data.home.length)}` : p);
@@ -116,7 +125,8 @@ export function clientMain(): void {
   /** The item a mark lands on: plugin children are marked through their plugin (CEO O3, DR7). */
   const markTarget = (i: ReportItem): ReportItem => (i.plugin && i.kind !== 'plugin' ? pluginItem(i.plugin) ?? i : i);
   const markOf = (i: ReportItem): Mark | undefined => state.marks[markTarget(i).id];
-  const markable = (i: ReportItem): boolean => i.kind !== 'instructions';
+  // Suites and built-in skills are never archived (their own uninstaller or the app owns them).
+  const markable = (i: ReportItem): boolean => i.kind !== 'instructions' && !i.removal.suite;
   const archived = (): ReportItem[] => Object.entries(state.marks).filter(([, m]) => m === 'archive').map(([id]) => byId.get(id)).filter((x): x is ReportItem => !!x);
   const usageCell = (i: ReportItem): string => {
     if (!data.hasLogs) return 'Unavailable';
@@ -223,7 +233,7 @@ export function clientMain(): void {
       data.projects.map(p => h('option', { value: p.root, selected: state.view === p.root }, `${p.name} (${plural(p.sessions, 'session')})`)));
     return h('header', { class: 'mast' }, h('div', { class: 'wrap' },
       h('span', { class: 'brand' }, logo(), 'packlight'),
-      h('span', { class: 'meta' }, select, h('span', null, 'Claude Code'), h('span', null, `scanned ${date(data.createdAt)}`))));
+      h('span', { class: 'meta' }, select, h('span', null, AGENT), h('span', null, `scanned ${date(data.createdAt)}`))));
   }
 
   function tabs(): HTMLElement {
@@ -271,13 +281,14 @@ export function clientMain(): void {
   function hero(): Child {
     const context = h('p', { class: 'context' },
       h('span', null, state.view === 'global' ? 'All projects' : projectName(state.view)),
-      h('span', null, 'Claude Code'),
+      h('span', null, AGENT),
       h('span', null, `${date(data.window.from)} to ${date(data.window.to)}`),
       h('span', null, plural(data.sessions, 'session')),
       data.linesUnreadable ? h('span', null, `parse gaps: ${plural(data.linesUnreadable, 'line')}`) : null);
     const go = (kind: Kind, pushed = false) => (): void => { state.kind = kind; state.sort = 'cost'; state.suggestedOnly = false; state.pushedOutOnly = pushed; render(); document.querySelector('.kindhead')?.scrollIntoView({ block: 'start' }); };
 
-    if (state.view === 'global') {
+    // Codex sessions mostly run outside a project, so its all-projects view keeps the measured headline.
+    if (state.view === 'global' && !(data.agent === 'codex' && data.sessionLoad)) {
       const top = [...data.projects].sort((a, b) => b.sessions - a.sessions).slice(0, 5);
       return h('div', { class: 'hero' }, context, h('h1', null, 'Pick a project to see what its sessions start with'),
         h('p', { class: 'hero-line' }, top.map(p => h('button', { class: 'btn', 'data-key': `pick-${p.root}`, onclick: () => { state.view = p.root; render(); } }, p.name))));
@@ -286,17 +297,24 @@ export function clientMain(): void {
     // What each session starts with, by source. Measured for the scanned project only.
     const L = state.view === data.scope ? data.sessionLoad : null;
     const b = budget();
-    const parts: { key: string; label: string; value: number; kind: Kind; pushed?: boolean }[] = L ? [
+    const parts: { key: string; label: string; value: number; kind: Kind; pushed?: boolean; fixed?: boolean }[] = L ? [
       { key: 'mcp', label: 'MCP tool names', value: L.mcpTools, kind: 'mcp' as Kind },
       { key: 'skills', label: 'skill listing', value: L.skillListing, kind: 'skill' as Kind },
       { key: 'hooks', label: 'hook text', value: L.hookStart, kind: 'hook' as Kind },
       { key: 'instr', label: 'MCP instructions', value: L.mcpInstructions, kind: 'mcp' as Kind },
       { key: 'agents', label: 'agent descriptions', value: L.agents, kind: 'agent' as Kind },
+      { key: 'agentsmd', label: 'AGENTS.md', value: L.agentsMd ?? 0, kind: 'instructions' as Kind },
+      { key: 'plugins', label: 'plugin and app instructions', value: L.pluginInstructions ?? 0, kind: 'plugin' as Kind },
     ].filter(p => p.value > 0).sort((x, y) => y.value - x.value) : [];
+    // Codex measures the whole first request; what packlight cannot attribute is Codex's own prompt and tools.
+    if (L?.measuredTokens) {
+      const rest = L.measuredTokens * 4 - parts.reduce((n, p) => n + p.value, 0);
+      if (rest > 0) parts.push({ key: 'base', label: `${AGENT} itself (its prompt and tools)`, value: rest, kind: 'skill' as Kind, fixed: true } as typeof parts[number]);
+    }
     const total = parts.reduce((n, p) => n + p.value, 0);
     if (!total) {
       if (!b) return h('div', { class: 'hero' }, context, h('h1', null, `Nothing measured for ${projectName(state.view)} yet`),
-        h('p', { class: 'lede' }, 'Claude Code records what a session starts with when it begins. None of the scanned sessions in this project did, so packlight cannot measure it.'));
+        h('p', { class: 'lede' }, `${AGENT} records what a session starts with when it begins. None of the scanned sessions in this project did, so packlight cannot measure it.`));
       const n = b.dropped.length;
       return h('div', { class: 'hero' }, context,
         h('h1', null, n ? `${n} skills pushed out of ${projectName(state.view)}'s skill listing` : `All ${n + b.withDescription.length} skills fit in ${projectName(state.view)}'s listing`),
@@ -308,12 +326,16 @@ export function clientMain(): void {
     const bar = h('div', { class: 'loadbar', role: 'img', 'aria-label': `Each session starts with about ${tokens(total)} tokens (${chars(total)} characters): ${parts.map(p => `${tokens(p.value)} tokens of ${p.label}`).join(', ')}${saved > 0 ? `. About ${tokens(saved)} tokens could go` : ''}` },
       parts.map(p => h('i', { class: `seg seg-${p.key}`, style: `width:${(p.value / total) * 100}%` })),
       saved > 0 ? h('i', { class: 'save', style: `width:${Math.min(100, (saved / total) * 100)}%` }) : null);
-    const legend = h('div', { class: 'legend' }, parts.map(p => h('button', { class: 'legend-item', 'data-key': `load-${p.key}`, title: `${chars(p.value)} characters`, onclick: go(p.kind, false) },
-      h('i', { class: `sw seg-${p.key}`, 'aria-hidden': 'true' }), h('b', { class: 'num' }, tokens(p.value)), ` ${p.label}`)),
+    const legend = h('div', { class: 'legend' }, parts.map(p => (p.fixed
+      ? h('span', { class: 'legend-item static' }, h('i', { class: `sw seg-${p.key}`, 'aria-hidden': 'true' }), h('b', { class: 'num' }, tokens(p.value)), ` ${p.label}`)
+      : h('button', { class: 'legend-item', 'data-key': `load-${p.key}`, title: `${chars(p.value)} characters`, onclick: go(p.kind, false) },
+        h('i', { class: `sw seg-${p.key}`, 'aria-hidden': 'true' }), h('b', { class: 'num' }, tokens(p.value)), ` ${p.label}`))),
       saved > 0 ? h('span', { class: 'legend-item static' }, h('i', { class: 'sw save', 'aria-hidden': 'true' }), h('b', { class: 'num' }, tokens(saved)), ' could go') : null);
     return h('div', { class: 'hero' }, context,
-      h('h1', null, `Each session in ${projectName(state.view)} starts with about ${tokens(total)} tokens of setup`),
-      bar, legend, fixRow());
+      h('h1', null, `${state.view === 'global' ? `Each ${AGENT} session` : `Each session in ${projectName(state.view)}`} starts with about ${tokens(total)} tokens of setup`),
+      bar, legend,
+      L?.measuredTokens ? h('p', { class: 'measured' }, `Measured by ${AGENT}: the median first request across ${plural(L.measuredSessions ?? 0, 'session')}, including your first message. The parts are estimated at about 4 characters per token.`) : null,
+      fixRow());
   }
 
   // The one-click fix (report/fix.ts) as one line; everything else opens below it on demand.
@@ -400,7 +422,9 @@ export function clientMain(): void {
       h('h2', null, label, h('span', { class: 'kc num' }, String(of.length))),
       h('p', { class: 'kinddesc' }, KIND_TEXT[state.kind]),
       h('p', { class: 'kindstats' },
-        state.kind === 'skill' && budget()
+        state.kind === 'skill' && data.agent === 'codex' && data.sessionLoad
+          ? stat(`${chars(data.sessionLoad.skillListing)} chars`, 'in the skill listing every session')
+          : state.kind === 'skill' && budget()
           ? stat(`${chars(budget()!.listingChars)} chars`, `in the listing every session (full text would be ${chars(standing)})`)
           : standing ? stat(`${chars(standing)} chars`, state.kind === 'instructions' ? 'loaded in their projects' : 'loaded every session') : null,
         state.kind !== 'instructions' && data.hasLogs ? stat(unseen, 'not observed') : null,

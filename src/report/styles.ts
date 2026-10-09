@@ -79,7 +79,8 @@ footer.foot a:visited { color: var(--ink-2); }
 .legend .sw.save { background: repeating-linear-gradient(135deg, var(--green) 0 2px, transparent 2px 4px); border: 1px solid var(--green); }
 .legend-item.static { cursor: default; }
 .legend-item.static:hover { background: none; color: var(--ink-2); }
-.seg-agents { background: var(--seg-5); }
+.seg-agents { background: var(--seg-5); } .seg-agentsmd { background: var(--seg-5); } .seg-plugins { background: var(--seg-3); } .seg-base { background: var(--seg-4); }
+.measured { color: var(--ink-2); font-size: 13px; margin-top: 4px; }
 .seg-mcp { background: var(--seg-1); } .seg-skills { background: var(--seg-2); } .seg-hooks { background: var(--seg-3); } .seg-instr { background: var(--seg-4); }
 .legend { display: flex; flex-wrap: wrap; gap: 2px 6px; margin: 8px 0 0 -8px; }
 .legend-item { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 6px; color: var(--ink-2); }

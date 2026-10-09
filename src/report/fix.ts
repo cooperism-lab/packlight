@@ -101,7 +101,8 @@ export function fixPlan(inv: Inventory, sug: Map<string, Suggestion>, keptIds: S
     }
     const goneItems = inv.items.filter(i => g.has(i.id));
     // Agent descriptions and MCP tool names and instructions load every session in full; skills go through the listing above.
-    const agentChars = goneItems.filter(i => i.kind === 'agent' || i.kind === 'mcp').reduce((n, i) => n + i.standingChars, 0);
+    // Without a capped listing (Codex), every skill line goes straight out of the session.
+    const agentChars = goneItems.filter(i => i.kind === 'agent' || i.kind === 'mcp' || (inv.agent === 'codex' && (i.kind === 'skill' || i.kind === 'command'))).reduce((n, i) => n + i.standingChars, 0);
     const hookChars = goneItems.filter(i => i.kind === 'hook' && i.hook?.event === 'SessionStart' && i.usage.hook?.firings)
       .reduce((n, i) => n + i.usage.hook!.injectedChars / i.usage.hook!.firings, 0);
     return { listing, descriptionsBack, sessionCharsSaved: Math.round((listing && before ? before.chars - listing.chars : 0) + agentChars + hookChars) };

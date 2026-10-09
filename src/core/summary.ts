@@ -20,6 +20,17 @@ export function summarize(inv: Inventory, ms: number): string {
       : `${list.filter(i => i.usage.total === 0).length} not observed`;
     out.push(`  ${String(list.length).padStart(4)} ${KIND_LABEL[k].padEnd(18)} ${detail}`);
   }
+  if (inv.agent === 'codex') {
+    out.push('');
+    const s = inv.codexStart;
+    if (s) {
+      const t = [...s.firstRequestTokens].sort((a, b) => a - b);
+      const median = t[Math.floor(t.length / 2)];
+      out.push(`Session start (${s.timestamp?.slice(0, 10) ?? 'latest'}, Codex ${s.version ?? '?'}): ${median !== undefined ? `about ${chars(median)} tokens in the first request (median of ${t.length} sessions, measured by Codex); ` : ''}skill listing ${chars(s.skillListingChars)} chars, AGENTS.md ${chars(s.agentsMdChars)}${s.pluginInstructionChars ? `, plugin instructions ${chars(s.pluginInstructionChars)}` : ''}${s.appInstructionChars ? `, app instructions ${chars(s.appInstructionChars)}` : ''}.`);
+    } else out.push('Session start: no Codex session recorded what it started with.');
+    if (inv.coverage.uncertain) out.push(`\nUsage may be incomplete: ${inv.coverage.reasons.join('; ')}.`);
+    return out.join('\n');
+  }
   // A project scan reads that project's listing; a global scan reads the newest listing from any session.
   const newest = Object.values(inv.budget).sort((a, b) => (a.timestamp ?? '').localeCompare(b.timestamp ?? '')).at(-1);
   const budget = inv.projectScope !== 'global' ? inv.budget[inv.projectScope] ?? newest : newest;

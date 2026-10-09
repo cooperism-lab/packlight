@@ -1,6 +1,8 @@
 import { existsSync } from 'node:fs';
 import { dirname, join, sep } from 'node:path';
 import { claudePaths, collectInventory, registeredProjects, skillUsageNames } from '../adapters/claude-code/inventory.js';
+import { codexPaths, codexProjects, collectCodexInventory } from '../adapters/codex/inventory.js';
+import { scanCodexLogs } from '../adapters/codex/logs.js';
 import { compareVersions, scanLogs, type HookFiring, type LogScan, type Use } from '../adapters/claude-code/logs.js';
 import { itemId, valueFingerprint } from './hash.js';
 import { SCHEMA_VERSION, type BudgetObservation, type Inventory, type Item, type ToolListing, type Usage } from './types.js';
@@ -244,6 +246,78 @@ export async function scan(opts: ScanOptions): Promise<Inventory> {
     toolListing,
     listingPriority: skillUsageNames(paths),
     unattributedHookChars: Math.round(logs.unattributedHookChars),
+    items,
+  };
+}
+
+/** Codex: the same inventory contract, read from ~/.codex. Usage comes from SKILL.md reads and MCP tool calls. */
+export async function scanCodex(opts: ScanOptions): Promise<Inventory> {
+  const now = opts.now ?? new Date();
+  const paths = codexPaths(opts.home);
+  const registered = codexProjects(paths);
+  const projectOf = projectResolver(registered, opts.home);
+  const logs = await scanCodexLogs(paths.sessions, { projectOf, since: opts.since });
+
+  const sessionsByRoot = new Map<string, number>();
+  for (const s of logs.sessions) if (s.projectRoot) sessionsByRoot.set(s.projectRoot, (sessionsByRoot.get(s.projectRoot) ?? 0) + 1);
+  const roots = [...new Set([...registered, ...sessionsByRoot.keys()])].filter(r => r !== opts.home).sort();
+  const existing = roots.filter(r => existsSync(r));
+
+  const items = collectCodexInventory(paths, existing);
+  const t = now.getTime();
+  creditUses(indexBy(items, ['skill', 'command']), logs.skillUses, t);
+  creditUses(indexBy(items, ['mcp']), logs.mcpUses, t);
+  rollUpPlugins(items);
+
+  const reasons: string[] = [];
+  if (!logs.sessions.length) reasons.push('no session logs found');
+  const newest = logs.versions.at(-1);
+  if (newest && (logs.unknownByVersion[newest] ?? 0) > 0) reasons.push(`Codex ${newest} wrote ${logs.unknownByVersion[newest]} unrecognised log line(s)`);
+  const cov = { uncertain: reasons.length > 0, reasons };
+  if (cov.uncertain) for (const it of items) it.usage.uncertain = true;
+
+  const seen = new Map<string, Item>();
+  for (const it of items) {
+    const prev = seen.get(it.id);
+    if (prev) throw new Error(`Two items share the id ${it.id}: ${prev.path ?? prev.name} and ${it.path ?? it.name}`);
+    seen.set(it.id, it);
+  }
+
+  const scope = projectOf(opts.cwd);
+  const projectScope = scope && roots.includes(scope) ? scope : 'global';
+  // What a session starts with: the scope's newest world_state, and first-request tokens from every scoped session.
+  const scoped = logs.starts.filter(s => projectScope === 'global' || s.projectRoot === projectScope);
+  const newestStart = scoped.at(-1) ?? logs.starts.at(-1);
+  const codexStart = newestStart ? { ...newestStart, firstRequestTokens: (scoped.length ? scoped : logs.starts).flatMap(s => s.firstRequestTokens) } : undefined;
+
+  // Only skills in the logged listing load; the rest sit on disk (a plugin the app has not switched on, say).
+  const listed = codexStart?.listedSkills;
+  if (listed?.length) {
+    const names = new Set(listed);
+    for (const it of items) if ((it.kind === 'skill') && !names.has(it.name)) it.standingChars = 0;
+    for (const p of items.filter(i => i.kind === 'plugin')) p.standingChars = 0;
+  }
+
+  const starts = logs.sessions.map(s => s.start).filter((x): x is string => !!x).sort();
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    scanId: now.toISOString().replace(/[:.]/g, '-'),
+    agent: 'codex',
+    createdAt: now.toISOString(),
+    home: opts.home,
+    projectScope,
+    window: { from: opts.since ?? starts[0] ?? null, to: now.toISOString() },
+    sessionsInWindow: logs.sessions.length,
+    linesTotal: logs.linesTotal,
+    linesUnknownShape: logs.linesUnknownShape,
+    linesUnreadable: logs.linesUnreadable,
+    claudeCodeVersions: logs.versions,
+    coverage: cov,
+    projects: roots.map(root => ({ root, sessions: sessionsByRoot.get(root) ?? 0, exists: existing.includes(root) })),
+    sessions: logs.sessions,
+    budget: {},
+    ...(codexStart ? { codexStart } : {}),
+    unattributedHookChars: 0,
     items,
   };
 }

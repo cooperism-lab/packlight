@@ -3,7 +3,7 @@
 
 export const SCHEMA_VERSION = 1;
 
-export type Agent = 'claude-code';
+export type Agent = 'claude-code' | 'codex';
 export type Kind = 'skill' | 'command' | 'agent' | 'hook' | 'plugin' | 'mcp' | 'instructions';
 export type RemovalMethod = 'move' | 'hook-extract' | 'mcp-extract' | 'plugin-disable' | 'manual';
 export type DeclScope = 'user' | 'local' | 'project' | 'project-local' | 'plugin' | 'app';
@@ -100,6 +100,21 @@ export interface BudgetObservation {
   entries?: ListingLine[];
 }
 
+export interface CodexStart {
+  sessionId: string;
+  timestamp: string | null;
+  version: string | null;
+  projectRoot: string | null;
+  skillListingChars: number;
+  /** Skill names in that listing: skills on disk but not listed do not load. */
+  listedSkills?: string[];
+  agentsMdChars: number;
+  pluginInstructionChars: number;
+  appInstructionChars: number;
+  /** Input tokens of each scoped session's first request, as Codex counted them (includes the first message). */
+  firstRequestTokens: number[];
+}
+
 export interface ListingLine { name: string; chars: number; described: boolean }
 
 /** One server's share of a session's tool list: its tool-name lines and its instructions block. */
@@ -139,6 +154,8 @@ export interface Inventory {
   sessions: SessionRecord[];
   /** Newest initial skill listing per project root ("global" key for no project). */
   budget: Record<string, BudgetObservation>;
+  /** Codex only: what its newest session started with, and measured first-request tokens (median over the window). */
+  codexStart?: CodexStart;
   /** Newest tool list per project root ("global" key for no project). */
   toolListing?: Record<string, ToolListing>;
   /** Skills Claude Code itself counts as used (~/.claude.json skillUsage): it keeps their descriptions first. */

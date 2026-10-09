@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { claudePaths, collectInventory } from '../adapters/claude-code/inventory.js';
+import { codexPaths, collectCodexInventory } from '../adapters/codex/inventory.js';
 import type { Inventory, Item, Kind, RemovalMethod } from '../core/types.js';
 import { INVOKE } from '../core/messages.js';
 import { atomicWrite, fileHash } from './fsops.js';
@@ -89,6 +90,8 @@ export function reportRecovery(r: RecoveryResult, out: (l: string) => void): voi
 }
 
 const existingRoots = (inv: Inventory): string[] => inv.projects.filter(p => existsSync(p.root)).map(p => p.root);
+/** The setup as it is now, read by the same adapter that made the scan. */
+const readNow = (inv: Inventory, home: string): Item[] => (inv.agent === 'codex' ? collectCodexInventory(codexPaths(home), existingRoots(inv)) : collectInventory(claudePaths(home), existingRoots(inv)));
 
 /** Builds the steps for one item from its current declarations (eng X2: every place it is switched on). */
 function stepsFor(item: Item, home: string): Step[] {
@@ -136,7 +139,7 @@ async function applyLocked(opts: ApplyOptions, paths: PacklightPaths, now: () =>
   for (const id of result.unknownIds) out(`Skipped ${id}: not an item in scan ${picks.scanId}.`);
 
   // The current state of every item, read fresh: a target that changed since the scan is refused (eng X1).
-  const fresh = new Map(collectInventory(claudePaths(opts.home), existingRoots(inv)).map(i => [i.id, i]));
+  const fresh = new Map(readNow(inv, opts.home).map(i => [i.id, i]));
   // Baseline hashes are taken now, with the inventory the plan is built from, not after the questions (CEO F2).
   const baseline = new Map<string, string | null>();
   for (const i of fresh.values()) for (const d of i.declarations) if (d.pointer && !baseline.has(d.file)) baseline.set(d.file, fileHash(d.file));
@@ -179,7 +182,7 @@ async function applyLocked(opts: ApplyOptions, paths: PacklightPaths, now: () =>
 
   const touchesSettings = plan.some(p => p.steps.some(s => 'file' in s));
   if (touchesSettings && opts.claudeRunning()) {
-    out('\nClaude Code is running. It can rewrite its settings files while packlight edits them; packlight checks each file just before writing, but a write in the same instant could still be lost.');
+    out(`\n${inv.agent === 'codex' ? 'Codex' : 'Claude Code'} is running. It can rewrite its settings files while packlight edits them; packlight checks each file just before writing, but a write in the same instant could still be lost.`);
     if (!opts.yes && !opts.singleQuestion && !(await opts.confirm('Continue anyway?'))) { out('Stopped. Nothing was changed.'); return { ...result, exitCode: 1 }; }
   }
   if (opts.singleQuestion && plan.length && !opts.yes && !(await opts.confirm(`\n${opts.singleQuestion}`))) {
@@ -223,7 +226,7 @@ async function applyLocked(opts: ApplyOptions, paths: PacklightPaths, now: () =>
   }
 
   // Verify against a fresh read that each archived item is no longer in effect (eng X2).
-  const after = new Map(collectInventory(claudePaths(opts.home), existingRoots(inv)).map(i => [i.id, i]));
+  const after = new Map(readNow(inv, opts.home).map(i => [i.id, i]));
   for (const { item } of result.archived) {
     const a = after.get(item.id);
     if (!a || item.removal.method === 'manual') continue;
