@@ -41,6 +41,9 @@
   header nav a { text-decoration: none; color: var(--ink-2); }
   header nav a:hover { color: var(--ink); }
   .hero { padding: 48px 0 40px; max-width: 860px; }
+  /* No orphans: headings balance their lines, text never ends on a single word. */
+  h1, h2, summary, .row b { text-wrap: balance; }
+  p, figcaption, li { text-wrap: pretty; }
   h1 { font-size: clamp(38px, 6vw, 68px); line-height: 1.03; letter-spacing: -0.045em; margin: 0; font-weight: 750; }
   h1 em { font-style: normal; color: var(--green); }
   .lede { font-size: clamp(18px, 2.1vw, 22px); color: var(--ink-2); margin: 22px 0 0; max-width: 700px; }
@@ -90,13 +93,13 @@
 
   <main>
     <div class="hero">
-      <h1>See the tokens Claude Code and Codex load <em>before you type.</em></h1>
-      <p class="lede">Every session starts with your whole setup: every MCP tool name, every skill, every hook's text, CLAUDE.md and AGENTS.md. packlight measures it from your own session logs, shows what you never use, and archives it in one step. Undo anytime.</p>
+      <h1>See the tokens Claude Code and Codex load <em>before you&nbsp;type.</em></h1>
+      <p class="lede">Every session starts with your whole setup: every MCP tool name, every skill, every hook's text, CLAUDE.md and AGENTS.md. packlight measures it from your own session logs, shows what you never use, and archives it in one step. Undo&nbsp;anytime.</p>
       <div class="ctas">
         <a class="btn primary" href="sample/">See a sample report</a>
         <a class="btn ghost" href="https://github.com/cooperism-lab/packlight"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>Open source on GitHub</a>
       </div>
-      <p class="note">Free and MIT licensed. Runs on your computer and sends nothing anywhere. macOS, Linux and Windows.</p>
+      <p class="note">Free and MIT licensed. Runs on your computer and sends nothing anywhere. macOS, Linux and&nbsp;Windows.</p>
     </div>
 
     <figure style="margin:0">
@@ -108,27 +111,27 @@
     </figure>
 
     <section aria-labelledby="what">
-      <h2 id="what">What packlight shows you</h2>
+      <h2 id="what">What packlight shows&nbsp;you</h2>
       <div class="rows">
-        <div class="row"><b>Tokens per session</b><p>How much of the context window your setup takes before you type, split by source. For Codex the number is measured: Codex logs each session's input tokens.</p></div>
-        <div class="row"><b>MCP servers</b><p>Each server's tool names and instructions, which load every session whether you call them or not, and how often you actually do.</p></div>
-        <div class="row"><b>Skills and plugins</b><p>Which skills you used, which you never did, and which Claude Code dropped from its skill listing because it ran out of room.</p></div>
-        <div class="row"><b>Hooks</b><p>The text each hook adds to your sessions and how long it takes to run.</p></div>
-        <div class="row"><b>One-click fix</b><p>Archives everything unused since it was installed, after one question. Items only you can remove (claude.ai connectors, app plugins, Codex config) come with the exact place to do it.</p></div>
+        <div class="row"><b>Tokens per session</b><p>How much of the context window your setup takes before you type, split by source. For Codex the number is measured: Codex logs each session's input&nbsp;tokens.</p></div>
+        <div class="row"><b>MCP servers</b><p>Each server's tool names and instructions, which load every session whether you call them or not, and how often you actually&nbsp;do.</p></div>
+        <div class="row"><b>Skills and plugins</b><p>Which skills you used, which you never did, and which Claude Code dropped from its skill listing because it ran out of&nbsp;room.</p></div>
+        <div class="row"><b>Hooks</b><p>The text each hook adds to your sessions and how long it takes to&nbsp;run.</p></div>
+        <div class="row"><b>One-click fix</b><p>Archives everything unused since it was installed, after one question. Items only you can remove (claude.ai connectors, app plugins, Codex config) come with the exact place to do&nbsp;it.</p></div>
       </div>
     </section>
 
     <section aria-labelledby="start">
-      <h2 id="start">Try it on your setup</h2>
+      <h2 id="start">Try it on your&nbsp;setup</h2>
       <ol class="steps">
-        <li><div><p>Install it. Needs Node 20 or later.</p>
+        <li><div><p>Install it. Needs Node 20 or&nbsp;later.</p>
 <pre>git clone https://github.com/cooperism-lab/packlight
 cd packlight
 npm install &amp;&amp; npm run build &amp;&amp; npm link</pre></div></li>
-        <li><div><p>Scan and open your report.</p>
+        <li><div><p>Scan and open your&nbsp;report.</p>
 <pre>packlight                 <span class="c"># Claude Code</span>
 packlight --agent codex   <span class="c"># Codex</span></pre></div></li>
-        <li><div><p>Archive what you don't use. It shows the plan and asks once. Everything can be put back.</p>
+        <li><div><p>Archive what you don't use. It shows the plan and asks once. Everything can be put&nbsp;back.</p>
 <pre>packlight fix
 packlight restore --all   <span class="c"># undo</span></pre></div></li>
       </ol>
@@ -136,11 +139,11 @@ packlight restore --all   <span class="c"># undo</span></pre></div></li>
 
     <section id="faq" aria-labelledby="faqh">
       <h2 id="faqh">Questions</h2>
-      <details><summary>Why does my Claude Code context fill up before I type anything?</summary><p>Every session starts with your whole setup: the name of every MCP tool, a listing of every skill, the text your hooks add, agent descriptions and CLAUDE.md files. packlight measures each part from your local session logs, so you can see which part is biggest.</p></details>
-      <details><summary>How many tokens do MCP servers use?</summary><p>Claude Code names every MCP tool at the start of each session, and some servers add instructions. A server with 200 tools can cost over 3,000 tokens per session even if you never call it. packlight shows each server's cost and how often you used it.</p></details>
-      <details><summary>Does it work with Codex?</summary><p>Yes. For Codex, packlight reads the input tokens Codex logs for each session's first request, so the headline is measured rather than estimated. Codex plugins and MCP servers are switched off in ~/.codex/config.toml; packlight shows you the exact line.</p></details>
-      <details><summary>Is it safe? Can I undo it?</summary><p>packlight asks before changing anything, moves items into an archive instead of deleting them, and restores them byte for byte with one command. It never edits CLAUDE.md or AGENTS.md, and it runs offline.</p></details>
-      <details><summary>How is this different from /context?</summary><p>Claude Code's /context shows what one session holds right now. packlight looks across all your sessions to find what you never use, then removes it safely and can put it back.</p></details>
+      <details><summary>Why does my Claude Code context fill up before I type&nbsp;anything?</summary><p>Every session starts with your whole setup: the name of every MCP tool, a listing of every skill, the text your hooks add, agent descriptions and CLAUDE.md files. packlight measures each part from your local session logs, so you can see which part is&nbsp;biggest.</p></details>
+      <details><summary>How many tokens do MCP servers&nbsp;use?</summary><p>Claude Code names every MCP tool at the start of each session, and some servers add instructions. A server with 200 tools can cost over 3,000 tokens per session even if you never call it. packlight shows each server's cost and how often you used&nbsp;it.</p></details>
+      <details><summary>Does it work with&nbsp;Codex?</summary><p>Yes. For Codex, packlight reads the input tokens Codex logs for each session's first request, so the headline is measured rather than estimated. Codex plugins and MCP servers are switched off in ~/.codex/config.toml; packlight shows you the exact&nbsp;line.</p></details>
+      <details><summary>Is it safe? Can I undo&nbsp;it?</summary><p>packlight asks before changing anything, moves items into an archive instead of deleting them, and restores them byte for byte with one command. It never edits CLAUDE.md or AGENTS.md, and it runs&nbsp;offline.</p></details>
+      <details><summary>How is this different from&nbsp;/context?</summary><p>Claude Code's /context shows what one session holds right now. packlight looks across all your sessions to find what you never use, then removes it safely and can put it&nbsp;back.</p></details>
     </section>
   </main>
 

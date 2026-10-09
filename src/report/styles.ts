@@ -25,6 +25,8 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 button:disabled { cursor: default; opacity: .5; }
 code, .mono { font-family: var(--mono); font-size: 12.5px; }
 h1, h2, h3, p { margin: 0; }
+/* No orphans: headings balance their lines, prose never ends on a single word. */
+h1, h2, h3 { text-wrap: balance; } p, li, dd { text-wrap: pretty; }
 .num { font-variant-numeric: tabular-nums; }
 .muted { color: var(--ink-2); }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
