@@ -207,7 +207,9 @@ test('reports a Codex setup with its measured first request', async ({ page }) =
   const now = new Date('2026-10-01T12:00:00Z');
   const { home, project } = buildCodexHome(join(fx.dir, 'codex'), now.getTime());
   const file = join(fx.dir, 'codex-report.html');
-  writeFileSync(file, renderReport(buildReport(await scanCodex({ home, cwd: project, now }), packlightPaths(home))));
+  const codexInv = await scanCodex({ home, cwd: project, now });
+  for (const i of codexInv.items) i.firstSeen = new Date(now.getTime() - 60 * 86_400_000).toISOString();
+  writeFileSync(file, renderReport(buildReport(codexInv, packlightPaths(home))));
   await page.goto(pathToFileURL(file).href);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Each session in app starts with about 21.1k tokens of setup');
   await expect(page.getByText(/Measured by Codex: the median first request across 22 sessions/)).toBeVisible();

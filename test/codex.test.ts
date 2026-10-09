@@ -24,6 +24,8 @@ beforeEach(async () => {
   dir = mkdtempSync(join(tmpdir(), 'packlight-codex-'));
   ({ home, project } = buildCodexHome(dir, NOW.getTime()));
   inv = await scanCodex({ home, cwd: project, now: NOW });
+  // Install dates come from file birth times, which only macOS lets a test move back; set them on the scan instead.
+  for (const i of inv.items) i.firstSeen = new Date(NOW.getTime() - 60 * 86_400_000).toISOString();
 });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
@@ -49,6 +51,9 @@ describe('Codex log signals', () => {
     expect(skillsIn('cat /Users/a/.codex/skills/.system/imagegen/SKILL.md')).toEqual(['imagegen']);
     expect(skillsIn('cat /Users/a/.codex/plugins/cache/m/pdf/26.1/skills/pdf/SKILL.md')).toEqual(['pdf:pdf']);
     expect(skillsIn('cat README.md')).toEqual([]);
+    // Windows, inside JSON-encoded arguments.
+    expect(skillsIn(JSON.stringify({ cmd: 'type C:\\Users\\a\\.codex\\skills\\release-notes\\SKILL.md' }))).toEqual(['release-notes']);
+    expect(skillsIn('C:\\Users\\a\\.codex\\plugins\\cache\\m\\pdf\\1\\skills\\pdf\\SKILL.md')).toEqual(['pdf:pdf']);
   });
 
   it('finds MCP servers by tool name or a code-mode call', () => {

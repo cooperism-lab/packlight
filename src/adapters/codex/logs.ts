@@ -39,8 +39,13 @@ const textOf = (v: unknown): number => (typeof v === 'string' ? v.length : v && 
 /** Skills a tool call opened: Codex reads a skill by reading its SKILL.md. Plugin skills are "<plugin>:<skill>". */
 export function skillsIn(text: string): string[] {
   const out = new Set<string>();
-  for (const m of text.matchAll(/\/plugins\/cache\/[^/"'\s]+\/([^/"'\s]+)\/[^/"'\s]+\/skills\/([^/"'\s]+)\/SKILL\.md/g)) out.add(`${m[1]}:${m[2]}`);
-  for (const m of text.matchAll(/\/\.codex\/skills\/(?:\.system\/)?([^/"'\s]+)\/SKILL\.md/g)) out.add(m[1]!);
+  // Either separator, and doubled backslashes as they appear inside JSON-encoded arguments (Windows).
+  const sep = String.raw`[\\/]+`;
+  const seg = String.raw`[^\\/"'\s]+`;
+  const plugin = new RegExp(String.raw`${sep}plugins${sep}cache${sep}${seg}${sep}(${seg})${sep}${seg}${sep}skills${sep}(${seg})${sep}SKILL\.md`, 'g');
+  const own = new RegExp(String.raw`${sep}\.codex${sep}skills${sep}(?:\.system${sep})?(${seg})${sep}SKILL\.md`, 'g');
+  for (const m of text.matchAll(plugin)) out.add(`${m[1]}:${m[2]}`);
+  for (const m of text.matchAll(own)) out.add(m[1]!);
   return [...out];
 }
 
