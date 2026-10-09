@@ -294,7 +294,8 @@ export function clientMain(): void {
       f.descriptionsBack ? `${plural(f.descriptionsBack, 'skill gets its', 'skills get their')} description back` : null,
       f.sessionCharsSaved > 0 ? `${chars(f.sessionCharsSaved)} fewer chars every session` : null,
     ].filter((x): x is string => !!x);
-    const kinds = KINDS.filter(([k]) => f.byKind[k]).map(([k, label]) => `${f.byKind[k]} ${label.toLowerCase()}`).join(', ');
+    const ONE: Record<string, string> = { skill: 'skill', command: 'command', agent: 'agent', hook: 'hook', plugin: 'plugin', mcp: 'MCP server' };
+    const kinds = KINDS.filter(([k]) => f.byKind[k]).map(([k, label]) => (f.byKind[k] === 1 ? `1 ${ONE[k]}` : `${f.byKind[k]} ${k === 'mcp' ? label : label.toLowerCase()}`)).join(', ');
     const hand = f.byHand;
     const handGains = hand ? [
       hand.descriptionsBack > f.descriptionsBack ? `${hand.descriptionsBack} descriptions back` : null,
