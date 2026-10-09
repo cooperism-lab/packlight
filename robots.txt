@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://cooperism-lab.github.io/packlight/sitemap.xml
