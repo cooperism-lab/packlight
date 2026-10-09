@@ -2,11 +2,14 @@
 
 See what your coding agent carries, keep what you use, archive the rest.
 
-Claude Code (and Codex) load every skill, agent, hook and connector you have installed. packlight scans your setup and your local session logs, then writes one self-contained report. The report shows:
+Claude Code loads every skill, agent, hook and MCP server you have installed into every session, used or not. packlight scans your setup and your local session logs, then writes one self-contained report. The report shows:
 
+- how many tokens each session starts with, by source: MCP tool names, the skill listing, hook text, agent descriptions
 - which skills are pushed out of Claude Code's skill listing
 - how much text each hook injects
-- how many items were not observed in any session
+- which items were not used in any session since they were installed
+
+Claude Code only, for now; Codex support is planned.
 
 You mark what to archive. `packlight apply` moves it out reversibly, and `packlight restore` brings it back.
 
@@ -18,10 +21,15 @@ Issues 1 to 3 are built (v0.1 scope). `packlight` scans your setup and opens a r
 
 Or skip the marking: `packlight fix` scans again, shows a plan that archives every unused item (none used since it was installed, over at least 20 sessions and 14 days, nothing you kept) with its projected gain, and asks once. It also lists the unused items only you can remove, such as claude.ai synced skills and the Claude app's own plugins.
 
+It is not on npm yet. To try it:
+
 ```bash
+git clone https://github.com/cooperism-lab/packlight
+cd packlight
 npm install
 npm run build
-node dist/cli.js
+npm link        # puts `packlight` on your PATH
+packlight       # scan, write the report and open it
 ```
 
 The spec has been through strategy, design and engineering review.
