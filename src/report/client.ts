@@ -54,6 +54,10 @@ export function clientMain(): void {
   };
   const chars = (n: number): string => (n >= 1e6 ? `${(n / 1e6).toFixed(1).replace(/\.0$/, '')}M` : n >= 1000 ? `${(n / 1000).toFixed(1).replace(/\.0$/, '')}k` : String(Math.round(n)));
   const date = (s: string | null | undefined): string => (s ? new Date(s).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: new Date(s).getFullYear() === new Date().getFullYear() ? undefined : 'numeric' }) : '—');
+  // Tokens are estimated from characters (logs record characters): about 4 per token, the same as CHARS_PER_TOKEN in model.ts.
+  const tokens = (c: number): string => chars(c / 4);
+  const setupTotal = (): number => { const l = data.sessionLoad; return l ? l.skillListing + l.mcpTools + l.mcpInstructions + l.hookStart + l.agents : 0; };
+  const share = (part: number, whole: number): string => { const p = (part / whole) * 100; return p > 0 && p < 1 ? 'under 1%' : `${Math.round(p)}%`; };
   const plural = (n: number, one: string, many = `${one}s`): string => `${n} ${n === 1 ? one : many}`;
   const tildify = (p: string): string => (p.startsWith(data.home) ? `~${p.slice(data.home.length)}` : p);
   const live = document.getElementById('live')!;
@@ -273,6 +277,7 @@ export function clientMain(): void {
       { key: 'skills', label: 'skill listing', value: L.skillListing, kind: 'skill' as Kind },
       { key: 'hooks', label: 'hook text', value: L.hookStart, kind: 'hook' as Kind },
       { key: 'instr', label: 'MCP instructions', value: L.mcpInstructions, kind: 'mcp' as Kind },
+      { key: 'agents', label: 'agent descriptions', value: L.agents, kind: 'agent' as Kind },
     ].filter(p => p.value > 0).sort((x, y) => y.value - x.value) : [];
     const total = parts.reduce((n, p) => n + p.value, 0);
     if (!total) {
@@ -283,12 +288,17 @@ export function clientMain(): void {
         h('h1', null, n ? `${n} skills pushed out of ${projectName(state.view)}'s skill listing` : `All ${n + b.withDescription.length} skills fit in ${projectName(state.view)}'s listing`),
         n ? h('p', { class: 'hero-line' }, h('button', { class: 'btn', 'data-key': 'review-pushed', onclick: go('skill', true) }, `Show the ${n}`)) : null);
     }
-    const bar = h('div', { class: 'loadbar', role: 'img', 'aria-label': `Each session starts with about ${chars(total)} chars: ${parts.map(p => `${chars(p.value)} ${p.label}`).join(', ')}` },
-      parts.map(p => h('i', { class: `seg seg-${p.key}`, style: `width:${(p.value / total) * 100}%` })));
-    const legend = h('div', { class: 'legend' }, parts.map(p => h('button', { class: 'legend-item', 'data-key': `load-${p.key}`, onclick: go(p.kind, false) },
-      h('i', { class: `sw seg-${p.key}`, 'aria-hidden': 'true' }), h('b', { class: 'num' }, chars(p.value)), ` ${p.label}`)));
+    // What the fix could take off, drawn over the end of the bar (projected).
+    const f = data.fix;
+    const saved = f.ids.length ? f.sessionCharsSaved : f.byHand?.sessionCharsSaved ?? 0;
+    const bar = h('div', { class: 'loadbar', role: 'img', 'aria-label': `Each session starts with about ${tokens(total)} tokens (${chars(total)} characters): ${parts.map(p => `${tokens(p.value)} tokens of ${p.label}`).join(', ')}${saved > 0 ? `. About ${tokens(saved)} tokens could go` : ''}` },
+      parts.map(p => h('i', { class: `seg seg-${p.key}`, style: `width:${(p.value / total) * 100}%` })),
+      saved > 0 ? h('i', { class: 'save', style: `width:${Math.min(100, (saved / total) * 100)}%` }) : null);
+    const legend = h('div', { class: 'legend' }, parts.map(p => h('button', { class: 'legend-item', 'data-key': `load-${p.key}`, title: `${chars(p.value)} characters`, onclick: go(p.kind, false) },
+      h('i', { class: `sw seg-${p.key}`, 'aria-hidden': 'true' }), h('b', { class: 'num' }, tokens(p.value)), ` ${p.label}`)),
+      saved > 0 ? h('span', { class: 'legend-item static' }, h('i', { class: 'sw save', 'aria-hidden': 'true' }), h('b', { class: 'num' }, tokens(saved)), ' could go') : null);
     return h('div', { class: 'hero' }, context,
-      h('h1', null, `Each session in ${projectName(state.view)} starts with about ${chars(total)} chars of setup`),
+      h('h1', null, `Each session in ${projectName(state.view)} starts with about ${tokens(total)} tokens of setup`),
       bar, legend, fixRow());
   }
 
@@ -297,10 +307,12 @@ export function clientMain(): void {
     const f = data.fix;
     if (state.view !== data.scope || (!f.ids.length && !f.byHand?.items.length)) return null;
     const hand = f.byHand;
+    const total = setupTotal();
     const gains = (back: number, saved: number): string[] => [
+      saved > 0 ? `saves about ${tokens(saved)} tokens per session${total ? ` (${share(saved, total)} of your setup)` : ''}` : null,
       back ? `${plural(back, 'skill description')} back` : null,
-      saved > 0 ? `${chars(saved)} fewer chars per session` : null,
     ].filter((x): x is string => !!x);
+    const exact = (saved: number): Child => (saved > 0 ? h('p', { class: 'muted' }, `Projected: ${chars(saved)} fewer characters per session, about ${tokens(saved)} tokens at roughly 4 characters per token.`) : null);
     const headline = f.ids.length
       ? [h('b', null, `Archive ${plural(f.ids.length, 'unused item')}`), gains(f.descriptionsBack, f.sessionCharsSaved).map(g => ` · ${g}`)]
       : [h('b', null, `${plural(hand!.items.length, 'unused item')} only you can remove`), gains(hand!.descriptionsBack, hand!.sessionCharsSaved).map(g => ` · ${g}`)];
@@ -314,6 +326,7 @@ export function clientMain(): void {
       state.fixOpen ? h('div', { class: 'fix-run', role: 'region', 'aria-label': 'Run the fix' },
         f.ids.length ? [
           h('p', { class: 'muted' }, `${kinds}. None was used since it was installed, over at least ${data.thresholds.sessions} sessions and ${data.thresholds.days} days. Everything can be restored.`),
+          exact(f.sessionCharsSaved),
           h('p', null, 'Run this in your terminal. It scans again, shows the plan and asks once before changing anything.'),
           h('div', { class: 'codebox' }, h('code', null, data.messages.fixCommand), h('button', { class: 'btn small', 'data-key': 'copy-fix', onclick: copy(data.messages.fixCommand, 'the fix command') }, 'Copy')),
           h('button', { class: 'linkish', 'data-key': 'fix-review', onclick: () => {
@@ -324,6 +337,7 @@ export function clientMain(): void {
         hand?.items.length ? h('div', { class: 'byhand' },
           h('p', null, h('b', null, f.ids.length ? `Also unused, but only you can remove: ${plural(hand.items.length, 'item')}` : 'Remove these where they were added'),
             f.ids.length && gains(hand.descriptionsBack, hand.sessionCharsSaved).length ? h('span', { class: 'muted' }, ` (with them: ${gains(hand.descriptionsBack, hand.sessionCharsSaved).join(', ')})`) : null),
+          f.ids.length ? null : exact(hand.sessionCharsSaved),
           [...groups].map(([where, list]) => h('p', null, h('b', null, where), ` ${list.map(i => i.kind === 'plugin' ? `${i.name} (${plural(i.turnsOff, 'part')})` : i.name).join(', ')}`))) : null) : null);
   }
 

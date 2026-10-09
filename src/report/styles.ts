@@ -2,7 +2,7 @@
 export const STYLES = String.raw`
 :root {
   --bg: #ffffff; --bg-2: #f6f7f8; --ink: #111318; --ink-2: #535b67; --ink-3: #9aa1ab; --line: #e6e8eb; --accent: #111318; --on-accent: #ffffff;
-  --seg-1: #27272a; --seg-2: #8a8f98; --seg-3: #c2833a; --seg-4: #cfd2d7;
+  --seg-1: #27272a; --seg-2: #8a8f98; --seg-3: #c2833a; --seg-4: #cfd2d7; --seg-5: #5b6b8c;
   --green: #15803d; --green-soft: #e9f7ee; --amber: #b45309; --amber-soft: #fff4e0; --red: #b91c1c; --red-soft: #fdecec;
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
   --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
@@ -11,7 +11,7 @@ export const STYLES = String.raw`
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #121317; --bg-2: #1a1c21; --ink: #eef0f3; --ink-2: #aab1bc; --ink-3: #6b7280; --line: #262a31; --accent: #eef0f3; --on-accent: #121317;
-    --seg-1: #e4e4e7; --seg-2: #8b919c; --seg-3: #d9993f; --seg-4: #4a4f58;
+    --seg-1: #e4e4e7; --seg-2: #8b919c; --seg-3: #d9993f; --seg-4: #4a4f58; --seg-5: #8fa3c9;
     --green: #34d070; --green-soft: #13261b; --amber: #f5b14b; --amber-soft: #2e2414; --red: #f87171; --red-soft: #2f1a1a;
   }
 }
@@ -74,6 +74,12 @@ footer.foot a:visited { color: var(--ink-2); }
 .hero h1 + .loadbar { margin-top: 4px; }
 .loadbar { display: flex; height: 14px; border-radius: 4px; overflow: hidden; background: var(--bg-2); gap: 2px; }
 .loadbar .seg { display: block; min-width: 3px; }
+.loadbar { position: relative; }
+.loadbar .save { position: absolute; right: 0; top: 0; bottom: 0; background: repeating-linear-gradient(135deg, var(--bg) 0 3px, transparent 3px 6px); box-shadow: inset 2px 0 0 var(--green); }
+.legend .sw.save { background: repeating-linear-gradient(135deg, var(--green) 0 2px, transparent 2px 4px); border: 1px solid var(--green); }
+.legend-item.static { cursor: default; }
+.legend-item.static:hover { background: none; color: var(--ink-2); }
+.seg-agents { background: var(--seg-5); }
 .seg-mcp { background: var(--seg-1); } .seg-skills { background: var(--seg-2); } .seg-hooks { background: var(--seg-3); } .seg-instr { background: var(--seg-4); }
 .legend { display: flex; flex-wrap: wrap; gap: 2px 6px; margin: 8px 0 0 -8px; }
 .legend-item { display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border-radius: 6px; color: var(--ink-2); }

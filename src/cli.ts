@@ -11,7 +11,7 @@ import { scan } from './core/scan.js';
 import { INVOKE, MESSAGES, PASTE_COMMAND } from './core/messages.js';
 import { summarize } from './core/summary.js';
 import type { Inventory } from './core/types.js';
-import { buildReport } from './report/model.js';
+import { buildReport, CHARS_PER_TOKEN, loadTotal, sessionLoad } from './report/model.js';
 import { fixPlan, type FixPlan } from './report/fix.js';
 import { renderReport } from './report/render.js';
 import { MIN_DAYS, MIN_SESSIONS, suggestions } from './report/suggest.js';
@@ -102,15 +102,20 @@ async function scanAndSave(home: string, packlightRoot: string, since?: string):
 
 const KIND_WORD: Record<string, [string, string]> = { skill: ['skill', 'skills'], command: ['command', 'commands'], agent: ['agent', 'agents'], hook: ['hook', 'hooks'], plugin: ['plugin', 'plugins'], mcp: ['MCP server', 'MCP servers'] };
 const count = (n: number, kind: string): string => `${n} ${KIND_WORD[kind]?.[n === 1 ? 0 : 1] ?? kind}`;
+/** "about 2k tokens less per session (10% of your setup; 7.9k characters)": tokens estimated at CHARS_PER_TOKEN. */
+const saving = (savedChars: number, setup: number): string => {
+  const pct = setup ? (savedChars / setup) * 100 : 0;
+  return `about ${kchars(savedChars / CHARS_PER_TOKEN)} tokens less per session (${setup ? `${pct > 0 && pct < 1 ? 'under 1' : Math.round(pct)}% of your setup; ` : ''}${kchars(savedChars)} characters)`;
+};
 const kchars = (n: number): string => (n >= 1000 ? `${(n / 1000).toFixed(1).replace(/\.0$/, '')}k` : String(n));
 
 /** What the fix will do and buy, in the words the report uses for its Fix button. */
-function fixSummary(plan: FixPlan, sessions: number): string[] {
+function fixSummary(plan: FixPlan, sessions: number, setup: number): string[] {
   if (!plan.ids.length) return ['Nothing to fix: no item passes the rules for archiving (unused since it was installed, over at least ' + `${MIN_SESSIONS} sessions and ${MIN_DAYS} days, not kept, not shared).`];
   const kinds = Object.entries(plan.byKind).map(([k, n]) => count(n!, k)).join(', ');
   const gains = [
     plan.descriptionsBack ? `${plan.descriptionsBack} skill${plan.descriptionsBack === 1 ? '' : 's'} get their description back in Claude's skill listing` : null,
-    plan.sessionCharsSaved > 0 ? `${kchars(plan.sessionCharsSaved)} fewer characters in every session` : null,
+    plan.sessionCharsSaved > 0 ? saving(plan.sessionCharsSaved, setup) : null,
   ].filter(Boolean);
   return [
     `\nFix: archive ${plan.ids.length} unused items (${kinds}${plan.turnsOff > plan.ids.length ? `; ${plan.turnsOff} items with plugin parts` : ''}).`,
@@ -119,11 +124,11 @@ function fixSummary(plan: FixPlan, sessions: number): string[] {
   ];
 }
 
-function printByHand(plan: FixPlan, out: (line: string) => void): void {
+function printByHand(plan: FixPlan, out: (line: string) => void, setup: number): void {
   const h = plan.byHand;
   if (!h?.items.length) return;
-  const gains = [h.descriptionsBack > plan.descriptionsBack ? `${h.descriptionsBack} descriptions back in all` : null, h.sessionCharsSaved > plan.sessionCharsSaved ? `${kchars(h.sessionCharsSaved)} fewer characters per session in all` : null].filter(Boolean);
-  out(`\nAlso unused, but only you can remove these${gains.length ? ` (with them: ${gains.join(', ')})` : ''}:`);
+  const gains = [h.sessionCharsSaved > plan.sessionCharsSaved ? saving(h.sessionCharsSaved, setup) : null, h.descriptionsBack > plan.descriptionsBack ? `${h.descriptionsBack} skill descriptions back` : null].filter(Boolean);
+  out(`\nAlso unused, but only you can remove these.${gains.length ? ` Removing them${plan.ids.length ? ' too' : ''}: ${gains.join(', ')}${plan.ids.length ? ' in all' : ''}.` : ''}`);
   const byWhere = new Map<string, typeof h.items>();
   for (const i of h.items) byWhere.set(i.where, [...(byWhere.get(i.where) ?? []), i]);
   for (const [where, list] of byWhere) out(`  ${where}: ${list.map(i => i.kind === 'plugin' ? `${i.name} (${i.turnsOff} parts)` : i.name).join(', ')}`);
@@ -218,8 +223,11 @@ async function main(argv: string[]): Promise<number> {
     const kept = new Set(Object.keys(readKeeps(paths).keeps));
     const plan = fixPlan(inventory, suggestions(inventory, kept), kept);
     writeReport(home, packlightRoot, inventory);
-    for (const line of fixSummary(plan, inventory.sessionsInWindow)) out(line);
-    if (!plan.ids.length) { printByHand(plan, out); return 0; }
+    const load = sessionLoad(inventory);
+    const setup = load ? loadTotal(load) : 0;
+    if (load) out(`Each session starts with about ${kchars(setup / CHARS_PER_TOKEN)} tokens of setup (${kchars(setup)} characters).`);
+    for (const line of fixSummary(plan, inventory.sessionsInWindow, setup)) out(line);
+    if (!plan.ids.length) { printByHand(plan, out, setup); return 0; }
     mkdirSync(packlightRoot, { recursive: true });
     const picksFile = join(packlightRoot, `fix-picks-${inventory.scanId}.json`);
     writeFileSync(picksFile, JSON.stringify({ scanId: inventory.scanId, picks: plan.ids.map(id => ({ id, action: 'archive' })) }, null, 1));
@@ -230,7 +238,7 @@ async function main(argv: string[]): Promise<number> {
         out(`\nDone. Undo everything with \`${INVOKE} restore --all\`, or one item with the restore command above.`);
         out(`Claude Code reads its setup when a session starts: start a new session, then run \`${INVOKE}\` to measure the result.`);
       }
-      printByHand(plan, out);
+      printByHand(plan, out, setup);
       return r.exitCode;
     } catch (err) {
       console.error(`packlight: ${(err as Error).message}`);

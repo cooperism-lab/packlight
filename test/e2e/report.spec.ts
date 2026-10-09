@@ -35,8 +35,8 @@ test('renders a hostile description as text and never runs it (CEO F4)', async (
 
 test('leads with what each session starts with, and keeps skill detail in the Skills section', async ({ page }) => {
   await open(page);
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^Each session in proj starts with about [\d.]+k? chars of setup$/);
-  await expect(page.getByRole('img', { name: /Each session starts with about .*MCP tool names.*skill listing/ })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^Each session in proj starts with about [\d.]+k? tokens of setup$/);
+  await expect(page.getByRole('img', { name: /Each session starts with about .* tokens \(.* characters\): .*tokens of MCP tool names/ })).toBeVisible();
   // The legend jumps to the kind behind each part of the bar.
   await page.getByRole('button', { name: /MCP tool names/ }).click();
   await expect(page.getByRole('heading', { level: 2, name: /MCP servers/ })).toBeVisible();
@@ -182,11 +182,13 @@ test('offers the one-click fix as one line, with the command and by-hand list be
   });
   await open(page);
   const fix = page.getByRole('region', { name: 'Fix' });
-  await expect(fix).toHaveText(/^Archive 2 unused items · 3 skill descriptions back · 1.5k fewer chars per session \(projected\)Fix it$/);
+  await expect(fix).toHaveText(/^Archive 2 unused items · saves about 375 tokens per session \(\d+% of your setup\) · 3 skill descriptions back \(projected\)Fix it$/);
   await expect(page.getByRole('region', { name: 'Run the fix' })).toHaveCount(0);
   await fix.getByRole('button', { name: 'Fix it' }).click();
   const run = page.getByRole('region', { name: 'Run the fix' });
   await expect(run).toContainText('packlight fix');
+  await expect(run).toContainText('Projected: 1.5k fewer characters per session, about 375 tokens at roughly 4 characters per token.');
+  await expect(page.getByText('375 could go')).toBeVisible();
   await expect(run).toContainText('claude.ai › Settings anthropic-skills:docs');
   expect((await new AxeBuilder({ page }).analyze()).violations.map(v => `${v.id} ${v.nodes.map(n => n.target.join(' ') + ' ' + n.failureSummary).join(' / ')}`)).toEqual([]);
   await page.getByRole('button', { name: 'Review them one by one instead' }).click();

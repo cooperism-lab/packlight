@@ -37,7 +37,7 @@ export interface ReportData {
   budget: Inventory['budget'];
   listingPriority: string[];
   /** What the scope's newest session started with, by source (characters). */
-  sessionLoad: { skillListing: number; mcpTools: number; mcpToolCount: number; mcpInstructions: number; hookStart: number; observedAt: string | null } | null;
+  sessionLoad: SessionLoad | null;
   /** The one-click fix: every suggested item, and what archiving them buys. */
   fix: FixPlan;
   thresholds: { sessions: number; days: number };
@@ -57,7 +57,13 @@ export function hookStartChars(inv: Inventory): number {
     .reduce((n, i) => n + i.usage.hook!.injectedChars / i.usage.hook!.firings, 0));
 }
 
-function sessionLoad(inv: Inventory): ReportData['sessionLoad'] {
+export interface SessionLoad { skillListing: number; mcpTools: number; mcpToolCount: number; mcpInstructions: number; hookStart: number; agents: number; observedAt: string | null }
+
+/** Rough tokens for a number of characters: about 4 per token for English text (labelled "about" wherever shown). */
+export const CHARS_PER_TOKEN = 4;
+export const loadTotal = (l: SessionLoad): number => l.skillListing + l.mcpTools + l.mcpInstructions + l.hookStart + l.agents;
+
+export function sessionLoad(inv: Inventory): SessionLoad | null {
   const tl = inv.toolListing?.[inv.projectScope] ?? Object.values(inv.toolListing ?? {}).sort((a, b) => (a.timestamp ?? '').localeCompare(b.timestamp ?? '')).at(-1);
   const b = newestBudget(inv);
   if (!tl && !b) return null;
@@ -68,6 +74,8 @@ function sessionLoad(inv: Inventory): ReportData['sessionLoad'] {
     mcpToolCount: servers.reduce((n, s) => n + s.tools, 0),
     mcpInstructions: servers.reduce((n, s) => n + s.instructionChars, 0),
     hookStart: hookStartChars(inv),
+    // Agent descriptions load every session too: global ones and the scanned project's own.
+    agents: Math.round(inv.items.filter(i => i.kind === 'agent' && i.enabled && (i.projectRoot === null || i.projectRoot === inv.projectScope)).reduce((n, i) => n + i.standingChars, 0)),
     observedAt: tl?.timestamp ?? b?.timestamp ?? null,
   };
 }
