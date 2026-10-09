@@ -1,8 +1,18 @@
 {
   "name": "packlight",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "description": "See what your coding agent carries, keep what you use, archive the rest.",
+  "keywords": [
+    "claude-code",
+    "claude",
+    "mcp",
+    "skills",
+    "hooks",
+    "context",
+    "tokens",
+    "cli",
+    "developer-tools"
+  ],
   "license": "MIT",
   "author": "Cooper Kao (https://github.com/cooperism-lab)",
   "repository": {
@@ -28,7 +38,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "scan": "node --import tsx src/cli.ts scan",
-    "e2e": "npm run build && playwright test"
+    "e2e": "npm run build && playwright test",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
