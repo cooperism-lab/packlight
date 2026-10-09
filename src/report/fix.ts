@@ -120,7 +120,7 @@ export function fixPlan(inv: Inventory, sug: Map<string, Suggestion>, keptIds: S
     descriptionsBack: auto.descriptionsBack,
     sessionCharsSaved: auto.sessionCharsSaved,
     byHand: withHand ? {
-      items: [...hand.values()].map(t => ({ id: t.id, name: t.name, kind: t.kind, where: t.removal.where ?? '', turnsOff: t.kind === 'plugin' ? partsOf(t).length : 1 })),
+      items: [...hand.values()].map(t => ({ id: t.id, name: t.source === 'claude.ai connector' && t.description ? `${t.name.slice(0, 8)}… (${t.description.replace(/^Tools: /, '').split(', ').slice(0, 2).join(', ')})` : t.name, kind: t.kind, where: t.removal.where ?? '', turnsOff: t.kind === 'plugin' ? partsOf(t).length : 1 })),
       descriptionsBack: withHand.descriptionsBack,
       sessionCharsSaved: withHand.sessionCharsSaved,
     } : null,

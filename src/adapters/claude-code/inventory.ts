@@ -1,5 +1,5 @@
-import { existsSync, lstatSync, readdirSync, readFileSync, statSync } from 'node:fs';
-import { basename, dirname, join } from 'node:path';
+import { existsSync, lstatSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
+import { basename, dirname, join, sep } from 'node:path';
 import { frontmatter } from '../../core/frontmatter.js';
 import { itemId, pathFingerprint, sha256, valueFingerprint } from '../../core/hash.js';
 import type { Declaration, DeclScope, Item, Kind, RemovalMethod } from '../../core/types.js';
@@ -122,7 +122,31 @@ function skillsIn(root: string, opts: { source: string; projectRoot: string | nu
       removal: suite ? { method: 'manual', where: `the ${name} suite's own uninstaller (other skills depend on ${dir})`, suite: true } : { method: opts.method, where: opts.where },
     }));
   }
+  // Skills a suite installed belong to it too: removing one by hand would leave the suite half-installed, and
+  // its own updater would put it back. A skill is a member when a file in it links into a suite folder, a suite
+  // has a folder of the same name, or its description ends with "(<suite name>)" as gstack writes them.
+  const suites = out.filter(i => i.removal.suite && i.path);
+  for (const it of out) {
+    if (it.removal.suite || !it.path || !suites.length) continue;
+    const owner = suites.find(su => linksInto(it.path!, su.path!) || existsSync(join(su.path!, basename(it.path!), 'SKILL.md'))
+      || new RegExp(`\\(${su.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\)\\s*$`).test(it.description));
+    if (owner) it.removal = { method: 'manual', where: `the ${owner.name} suite's own uninstaller (installed with ${owner.name})`, suite: true };
+  }
   return out;
+}
+
+/** Whether any file directly in `dir` is a symlink that resolves inside `target`. */
+function linksInto(dir: string, target: string): boolean {
+  let names: string[];
+  try { names = readdirSync(dir); } catch { return false; }
+  const real = (() => { try { return realpathSync(target); } catch { return target; } })();
+  return names.some(n => {
+    try {
+      if (!lstatSync(join(dir, n)).isSymbolicLink()) return false;
+      const r = realpathSync(join(dir, n));
+      return r === real || r.startsWith(real + sep);
+    } catch { return false; }
+  });
 }
 
 function commandsIn(root: string, opts: { source: string; projectRoot: string | null; plugin?: string; enabled: boolean; method: RemovalMethod; where?: string; firstSeen?: string | null }, prefix = ''): Item[] {
