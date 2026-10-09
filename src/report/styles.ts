@@ -34,7 +34,7 @@ a { color: inherit; text-underline-offset: .15em; } a:visited { color: var(--ink
 header.mast { border-bottom: 1px solid var(--line); }
 .mast .wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding-top: 14px; padding-bottom: 14px; }
 .brand { display: inline-flex; align-items: center; gap: 8px; font-weight: 650; font-size: 17px; letter-spacing: -0.02em; }
-.brand svg { width: 26px; height: 26px; }
+.brand svg { width: 28px; height: 28px; }
 .mast .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; color: var(--ink-2); font-size: 14px; }
 .mast select { font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; max-width: 60vw; }
 nav.tabs { border-bottom: 1px solid var(--line); }

@@ -1,3 +1,10 @@
+<p>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/packlight-mark-light.svg">
+    <img src="docs/brand/packlight-mark.svg" width="72" height="72" alt="">
+  </picture>
+</p>
+
 # packlight
 
 See what your coding agent carries, keep what you use, archive the rest.

@@ -192,15 +192,29 @@ export function clientMain(): void {
       h('span', null, 'This page runs only on your computer and sends nothing.')));
   }
 
+  // The mark from report/logo.ts, drawn with DOM calls (no markup strings in the page, CEO F4).
   function logo(): Element {
-    const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    s.setAttribute('viewBox', '0 0 28 28'); s.setAttribute('aria-hidden', 'true');
-    const add = (tag: string, attrs: Record<string, string>): void => { const e = document.createElementNS('http://www.w3.org/2000/svg', tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v); s.append(e); };
-    add('path', { d: 'M12 6.5V5.5a2 2 0 0 1 4 0v1', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.8', 'stroke-linecap': 'round' });
-    add('path', { d: 'M8.5 6.5h11a3.5 3.5 0 0 1 3.5 3.5v11.5a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3V10a3.5 3.5 0 0 1 3.5-3.5z', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.8' });
-    add('path', { d: 'M5.2 12.5c2.8 1.6 5.7 2.3 8.8 2.3s6-.7 8.8-2.3', fill: 'none', stroke: 'currentColor', 'stroke-width': '1.8', 'stroke-linecap': 'round' });
-    add('rect', { x: '9.5', y: '17.5', width: '9', height: '5', rx: '1.6', fill: 'var(--green)' });
-    return s;
+    const NS = 'http://www.w3.org/2000/svg';
+    const el = (tag: string, attrs: Record<string, string>, ...kids: Element[]): Element => {
+      const e = document.createElementNS(NS, tag);
+      for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+      e.append(...kids);
+      return e;
+    };
+    const cut = { stroke: '#000' };
+    return el('svg', { viewBox: '0 0 64 64', 'aria-hidden': 'true' },
+      el('defs', {}, el('mask', { id: 'pl-cut', maskUnits: 'userSpaceOnUse', x: '0', y: '0', width: '64', height: '64' },
+        el('rect', { width: '64', height: '64', fill: '#fff' }),
+        el('path', { d: 'M15.5 34v19M48.5 34v19', ...cut, 'stroke-width': '2.5' }),
+        el('path', { d: 'M22 15.5v7.5a5 5 0 0 0 5 5h10a5 5 0 0 0 5-5v-7.5', fill: 'none', ...cut, 'stroke-width': '3' }),
+        el('rect', { x: '29', y: '23', width: '6', height: '8', rx: '2', fill: '#000' }),
+        el('rect', { x: '22', y: '39', width: '20', height: '20', rx: '4', fill: 'none', ...cut, 'stroke-width': '3' }))),
+      el('g', { mask: 'url(#pl-cut)', fill: 'currentColor' },
+        el('path', { d: 'M28 13v-2a4 4 0 0 1 8 0v2', fill: 'none', stroke: 'currentColor', 'stroke-width': '4' }),
+        el('rect', { x: '10', y: '35', width: '10', height: '17', rx: '3.5' }),
+        el('rect', { x: '44', y: '35', width: '10', height: '17', rx: '3.5' }),
+        el('rect', { x: '16', y: '12', width: '32', height: '47', rx: '7' })),
+      el('rect', { x: '24.5', y: '41.5', width: '15', height: '17.5', rx: '2', fill: '#3fae6e' }));
   }
 
   function masthead(): HTMLElement {
