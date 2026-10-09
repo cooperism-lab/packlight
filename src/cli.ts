@@ -88,10 +88,13 @@ function scopeFor(paths: ReturnType<typeof packlightPaths>, agent: Agent): strin
   } catch { return 'global'; }
 }
 
-/** Writes report.html beside packlight's data and returns its path. */
+/** One report file per agent, so a Codex scan never replaces the Claude Code report (or the other way round). */
+const reportFile = (agent: Agent): string => (agent === 'codex' ? 'report-codex.html' : 'report.html');
+
+/** Writes the agent's report beside packlight's data and returns its path. */
 function writeReport(home: string, packlightRoot: string, inv: Inventory): string {
   const paths = packlightPaths(home, packlightRoot);
-  const file = join(packlightRoot, 'report.html');
+  const file = join(packlightRoot, reportFile(inv.agent));
   mkdirSync(packlightRoot, { recursive: true });
   writeFileSync(file, renderReport(buildReport(inv, paths)));
   return file;

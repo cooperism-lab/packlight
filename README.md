@@ -16,7 +16,7 @@ Claude Code loads every skill, agent, hook and MCP server you have installed int
 - how much text each hook injects
 - which items were not used in any session since they were installed
 
-Works with **Claude Code** and **Codex**. packlight picks Claude Code when `~/.claude` exists; for Codex, add `--agent codex` (`packlight --agent codex`, `packlight fix --agent codex`). For Codex the headline is measured: Codex logs the input tokens of each session's first request, and packlight reports the median. Codex plugins and MCP servers are switched off in `~/.codex/config.toml`, so packlight lists them with the exact line to change rather than editing that file.
+Works with **Claude Code** and **Codex**. packlight picks Claude Code when `~/.claude` exists; for Codex, add `--agent codex` (`packlight --agent codex`, `packlight fix --agent codex`). Each tool gets its own report: `~/.packlight/report.html` for Claude Code, `~/.packlight/report-codex.html` for Codex. For Codex the headline is measured: Codex logs the input tokens of each session's first request, and packlight reports the median. Codex plugins and MCP servers are switched off in `~/.codex/config.toml`, so packlight lists them with the exact line to change rather than editing that file.
 
 **[See a sample report →](https://cooperism-lab.github.io/packlight/)** (an invented setup, so you can click around before installing).
 
