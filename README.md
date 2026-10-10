@@ -60,6 +60,10 @@ Planned releases:
 - **v0.2:** overlap detection, plus a packlight skill that rates items and writes "which one" cards. This is the public launch.
 - **v0.3:** Codex adapter.
 
+## What's new
+
+See [CHANGELOG.md](CHANGELOG.md), or [GitHub Releases](https://github.com/cooperism-lab/packlight/releases) to be told about new versions (Watch › Custom › Releases). `npx packlight-cli` always runs the newest version; a global install updates with `npm install -g packlight-cli`.
+
 ## Who made it
 
 Built by Cooper Kao ([cooperism-lab](https://github.com/cooperism-lab)). Issues and pull requests are welcome.
