@@ -51,6 +51,12 @@
   .btn.ghost { background: var(--card); border: 1px solid var(--line); }
   .btn svg { width: 22px; height: 22px; fill: currentColor; }
   .note { margin-top: 14px; font-size: 14px; color: var(--ink-3); }
+  .news { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 0 0 22px; padding: 6px 14px 6px 6px; border-radius: 999px; background: var(--card); border: 1px solid var(--line); font-size: 14px; color: var(--ink-2); text-decoration: none; }
+  .news b { background: var(--green); color: #fff; font-weight: 600; padding: 2px 10px; border-radius: 999px; }
+  .news span { color: var(--ink); font-weight: 600; }
+  .news i { font-style: normal; }
+  @media (max-width: 560px) { .news i { display: none; } }
+  .news:hover { border-color: rgba(24,24,27,.25); }
   .window { margin: 18px 0 0; border-radius: 22px; overflow: hidden; background: #121317; box-shadow: 0 40px 90px rgba(28,44,30,.3), 0 8px 24px rgba(28,44,30,.15); }
   .window .bar { height: 42px; display: flex; align-items: center; gap: 8px; padding: 0 16px; background: #1a1c21; border-bottom: 1px solid #262a31; }
   .window .bar i { width: 12px; height: 12px; border-radius: 50%; display: block; }
@@ -91,6 +97,7 @@
 
   <main>
     <div class="hero">
+      <a class="news" href="https://github.com/cooperism-lab/packlight/releases"><b>v0.1.1</b><i>Savings never show over 100% of your&nbsp;setup</i> <span>All releases&nbsp;→</span></a>
       <h1>See the tokens Claude&nbsp;Code and Codex load <em class="keep">before you type.</em></h1>
       <p class="lede">Every session starts with your whole setup: every MCP tool name, every skill, every hook's text, CLAUDE.md and AGENTS.md. packlight measures it from your own session logs, shows what you never use, and archives it in one step. Undo&nbsp;anytime.</p>
       <div class="ctas">
@@ -156,6 +163,7 @@ packlight restore --all   <span class="c"># undo</span></pre></div></li>
   <footer>
     <span>packlight, built by Cooper Kao</span>
     <a href="https://github.com/cooperism-lab/packlight">github.com/cooperism-lab/packlight</a>
+    <a href="https://github.com/cooperism-lab/packlight/releases">Releases</a>
     <span>MIT licence</span>
   </footer>
 </div>
